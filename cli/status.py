@@ -29,6 +29,7 @@ from cli.common import (
     read_local_tool_state,
     red,
     runtime_dir,
+    state_pid_matches,
     yellow,
 )
 from core.supervision import load_supervisor_state, probe_service, probe_supervisor
@@ -55,14 +56,36 @@ def _probe_nats(url: str) -> dict:
     return {"alive": alive, "url": f"{host}:{port}"}
 
 
-def _probe_local_tool(root: Path, url: str) -> dict:
+def _probe_local_tool(root: Path, url: str, platform) -> dict:
     state = read_local_tool_state(root)
+    payload = None
+    reason = None
     try:
         resp = httpx.get(f"{url}/api/health", timeout=0.5)
-        health_ok = resp.status_code == 200
+        if resp.status_code == 200:
+            payload = resp.json()
+        health_ok = resp.status_code == 200 and isinstance(payload, dict) and payload.get("service") == "artha-local-tool"
     except httpx.RequestError:
         health_ok = False
-    return {"alive": health_ok, "url": url, "state": state}
+        reason = "health request failed"
+    except ValueError:
+        health_ok = False
+        reason = "invalid health response"
+
+    if health_ok and state:
+        # WARNING: without this identity check, a stale/foreign local_tool on
+        # the same port can make status report this repo as healthy.
+        state_alive, state_reason = state_pid_matches(platform, state)
+        if not state_alive:
+            health_ok = False
+            reason = f"stale state: {state_reason}"
+        elif isinstance(state.get("pid"), int) and payload.get("pid") != state["pid"]:
+            health_ok = False
+            reason = f"health pid {payload.get('pid')} != state pid {state['pid']}"
+        elif state.get("home") and payload.get("home") != state.get("home"):
+            health_ok = False
+            reason = "health home != state home"
+    return {"alive": health_ok, "url": url, "state": state, "health": payload, "reason": reason}
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +112,8 @@ def _render_human(report: dict) -> None:
     extra = []
     if lt.get("state"):
         extra.append(f"pid {lt['state'].get('pid')}")
+    if not lt["alive"] and lt.get("reason"):
+        extra.append(dim(lt["reason"]))
     print(f"local_tool    {_tag(lt['alive'])}   {lt['url']}   " + " ".join(extra))
 
     sv = report["supervisor"]
@@ -140,7 +165,7 @@ def run(args) -> int:
     nats_info = _probe_nats(nats_url(root))
 
     # local_tool
-    lt_info = _probe_local_tool(root, local_tool_url(root))
+    lt_info = _probe_local_tool(root, local_tool_url(root), platform)
 
     # supervisor
     sup_info = probe_supervisor(rt_dir, platform)

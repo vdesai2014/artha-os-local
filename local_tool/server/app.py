@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .deps import init_store
+from .deps import get_ctx, init_store
 from .routes import episodes, manifests, projects, runs, sync
 
 
@@ -25,6 +25,15 @@ BRIDGE_WS_BASE = "ws://127.0.0.1:8765/ws"
 
 def _state_file_path(home: Path) -> Path:
     return home / ".artha" / "run" / "local_tool.json"
+
+
+def _pid_start_ticks(pid: int) -> int | None:
+    try:
+        from supervisor.platform import get_platform_adapter
+
+        return get_platform_adapter().process_start_ticks(pid)
+    except Exception:
+        return None
 
 
 def _write_state_file(home: Path) -> Path | None:
@@ -53,9 +62,11 @@ def _write_state_file(home: Path) -> Path | None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "pid": os.getpid(),
+        "pid_start_ticks": _pid_start_ticks(os.getpid()),
         "host": host,
         "port": port,
         "url": f"http://{host}:{port}",
+        "home": str(home),
         "started_at": time.time(),
     }
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
@@ -103,7 +114,15 @@ app.include_router(sync.router, prefix="/api")
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "artha-local-tool"}
+    ctx = get_ctx()
+    pid = os.getpid()
+    return {
+        "status": "ok",
+        "service": "artha-local-tool",
+        "pid": pid,
+        "pid_start_ticks": _pid_start_ticks(pid),
+        "home": str(ctx.home),
+    }
 
 
 def _with_query(base: str, query_params) -> str:

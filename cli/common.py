@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import json
 from pathlib import Path
 
 import yaml
@@ -87,7 +88,6 @@ def nats_url(root: Path) -> str:
 
 def read_local_tool_state(root: Path) -> dict | None:
     """Returns {pid, port, host, url, started_at} or None if no state file."""
-    import json
     path = runtime_dir(root) / "local_tool.json"
     try:
         with path.open("r", encoding="utf-8") as fh:
@@ -97,6 +97,47 @@ def read_local_tool_state(root: Path) -> dict | None:
     except (FileNotFoundError, ValueError, OSError):
         pass
     return None
+
+
+def read_nats_state(root: Path) -> dict | None:
+    """Returns nats runtime state, with legacy nats.pid fallback."""
+    state_path = runtime_dir(root) / "nats.json"
+    try:
+        with state_path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            return data
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+
+    pid_path = runtime_dir(root) / "nats.pid"
+    try:
+        return {"pid": int(pid_path.read_text().strip())}
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def state_pid_matches(platform, state: dict | None, *, pid_key: str = "pid", start_key: str = "pid_start_ticks") -> tuple[bool, str | None]:
+    """Validate that a state-file pid still names the same process.
+
+    Older state files may not have start ticks; in that case we fall back to
+    pid liveness for compatibility. New state files include start ticks so
+    down/force paths do not kill a reused pid.
+    """
+    if not state or not isinstance(state.get(pid_key), int):
+        return False, "no pid"
+    pid = state[pid_key]
+    if not platform.pid_is_alive(pid):
+        return False, "pid dead"
+    expected_ticks = state.get(start_key)
+    if not isinstance(expected_ticks, int):
+        return True, None
+    live_ticks = platform.process_start_ticks(pid)
+    if live_ticks is None:
+        return False, "pid gone"
+    if live_ticks != expected_ticks:
+        return False, "pid reused"
+    return True, None
 
 
 def local_tool_url(root: Path) -> str:

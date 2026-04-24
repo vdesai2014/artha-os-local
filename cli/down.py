@@ -13,7 +13,9 @@ from cli.common import (
     find_repo_root,
     green,
     read_local_tool_state,
+    read_nats_state,
     runtime_dir,
+    state_pid_matches,
     yellow,
 )
 from core.supervision import load_supervisor_state
@@ -34,7 +36,14 @@ def _stop_supervisor(root: Path, platform) -> str:
     if not sv or not isinstance(sv.get("pid"), int):
         return yellow("not running")
     pid = sv["pid"]
-    if not platform.pid_is_alive(pid):
+    alive, reason = state_pid_matches(platform, sv)
+    if not alive:
+        if reason == "pid reused":
+            (runtime_dir(root) / "supervisor.json").unlink(missing_ok=True)
+            return yellow("stale state (pid reused; not killed)")
+        if reason == "pid dead":
+            (runtime_dir(root) / "supervisor.json").unlink(missing_ok=True)
+            return yellow("already dead")
         return yellow("already dead")
     # Supervisor terminates cleanly via its SIGTERM handler, which in turn
     # brings wrappers down via the lease expiring. terminate_process_tree
@@ -50,7 +59,12 @@ def _stop_local_tool(root: Path, platform) -> str:
     if not lt or not isinstance(lt.get("pid"), int):
         return yellow("not running")
     pid = lt["pid"]
-    if not platform.pid_is_alive(pid):
+    alive, reason = state_pid_matches(platform, lt)
+    if not alive:
+        if reason in {"pid dead", "pid reused"}:
+            (runtime_dir(root) / "local_tool.json").unlink(missing_ok=True)
+        if reason == "pid reused":
+            return yellow("stale state (pid reused; not killed)")
         return yellow("already dead")
     try:
         os.kill(pid, signal.SIGTERM)
@@ -67,15 +81,18 @@ def _stop_local_tool(root: Path, platform) -> str:
 
 
 def _stop_nats(root: Path, platform) -> str:
-    pid_file = root / ".artha" / "run" / "nats.pid"
-    if not pid_file.exists():
+    state = read_nats_state(root)
+    if not state or not isinstance(state.get("pid"), int):
         return yellow("no pid file (not started by artha?)")
-    try:
-        pid = int(pid_file.read_text().strip())
-    except ValueError:
-        return yellow("unreadable pid file")
-    if not platform.pid_is_alive(pid):
+    pid = state["pid"]
+    pid_file = runtime_dir(root) / "nats.pid"
+    state_file = runtime_dir(root) / "nats.json"
+    alive, reason = state_pid_matches(platform, state)
+    if not alive:
         pid_file.unlink(missing_ok=True)
+        state_file.unlink(missing_ok=True)
+        if reason == "pid reused":
+            return yellow("stale state (pid reused; not killed)")
         return yellow("already dead")
     try:
         os.kill(pid, signal.SIGTERM)
@@ -83,12 +100,14 @@ def _stop_nats(root: Path, platform) -> str:
         return yellow(f"kill failed: {exc}")
     if _wait_dead(platform, pid):
         pid_file.unlink(missing_ok=True)
+        state_file.unlink(missing_ok=True)
         return green("stopped")
     try:
         os.kill(pid, signal.SIGKILL)
     except OSError:
         pass
     pid_file.unlink(missing_ok=True)
+    state_file.unlink(missing_ok=True)
     return green("stopped")
 
 

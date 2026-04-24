@@ -22,10 +22,12 @@ from cli.common import (
     nats_url,
     parse_nats_conf,
     read_local_tool_state,
+    read_nats_state,
     runtime_dir,
     red,
+    state_pid_matches,
 )
-from core.supervision import load_supervisor_state
+from core.supervision import load_supervisor_state, write_json_atomic
 from supervisor.platform import get_platform_adapter
 
 
@@ -56,15 +58,20 @@ def _already_running(root: Path, platform) -> list[str]:
     # NATS
     conf = parse_nats_conf(root / "config" / "nats.conf")
     port = conf.get("port", 4222)
+    # WARNING: TCP-open is only a port-level check. A foreign NATS process
+    # can occupy this port; state-file validation below is what decides
+    # whether artha is allowed to kill it.
     if _tcp_open("localhost", port):
         blockers.append(f"nats-server (port {port})")
     # local_tool state file + pid alive
     st = read_local_tool_state(root)
-    if st and isinstance(st.get("pid"), int) and platform.pid_is_alive(st["pid"]):
+    alive, _reason = state_pid_matches(platform, st)
+    if alive:
         blockers.append(f"local_tool (pid {st['pid']})")
     # supervisor state file + pid alive
     sv = load_supervisor_state(runtime_dir(root))
-    if sv and isinstance(sv.get("pid"), int) and platform.pid_is_alive(sv["pid"]):
+    alive, _reason = state_pid_matches(platform, sv)
+    if alive:
         blockers.append(f"supervisor (pid {sv['pid']})")
     return blockers
 
@@ -74,7 +81,23 @@ def _ensure_dirs(root: Path) -> None:
     (root / ".artha" / "run").mkdir(parents=True, exist_ok=True)
 
 
-def _start_nats(root: Path) -> subprocess.Popen:
+def _write_nats_state(root: Path, proc: subprocess.Popen, *, port: int, cmd: list[str], platform) -> None:
+    run_dir = root / ".artha" / "run"
+    payload = {
+        "pid": proc.pid,
+        "pid_start_ticks": platform.process_start_ticks(proc.pid),
+        "host": "localhost",
+        "port": port,
+        "url": f"nats://localhost:{port}",
+        "cmd": cmd,
+        "started_at": time.time(),
+    }
+    write_json_atomic(run_dir / "nats.json", payload)
+    # Legacy pid file retained so older docs/tools still have a simple path.
+    (run_dir / "nats.pid").write_text(f"{proc.pid}\n", encoding="utf-8")
+
+
+def _start_nats(root: Path, platform) -> subprocess.Popen:
     conf_path = root / "config" / "nats.conf"
     pid_path = root / ".artha" / "run" / "nats.pid"
     conf = parse_nats_conf(conf_path)
@@ -102,10 +125,9 @@ def _start_nats(root: Path) -> subprocess.Popen:
         if confined:
             print(dim("  (nats config/pidfile unreadable — likely snap-confined; retrying with bare flags)"))
             proc = subprocess.Popen(try_flags, stdout=log_out, stderr=log_err, start_new_session=True)
-            pid_path.parent.mkdir(parents=True, exist_ok=True)
-            pid_path.write_text(f"{proc.pid}\n")
         else:
             raise SystemExit(red(f"nats-server exited immediately. tail:\n{tail}"))
+    _write_nats_state(root, proc, port=port, cmd=try_flags if proc.args == try_flags else try_conf, platform=platform)
     return proc
 
 
@@ -151,27 +173,35 @@ def _kill_from_state(root: Path, platform) -> None:
     """Kill anything `up` would conflict with. Used by --force."""
     # supervisor
     sv = load_supervisor_state(runtime_dir(root))
-    if sv and isinstance(sv.get("pid"), int) and platform.pid_is_alive(sv["pid"]):
+    alive, reason = state_pid_matches(platform, sv)
+    if alive:
         print(dim(f"  kill supervisor pid {sv['pid']}"))
         platform.terminate_process_tree(sv["pid"], grace_period_s=3.0)
+    elif sv and reason == "pid reused":
+        print(dim(f"  skip supervisor stale pid {sv.get('pid')} (pid reused)"))
     # local_tool
     lt = read_local_tool_state(root)
-    if lt and isinstance(lt.get("pid"), int) and platform.pid_is_alive(lt["pid"]):
+    alive, reason = state_pid_matches(platform, lt)
+    if alive:
         print(dim(f"  kill local_tool pid {lt['pid']}"))
         try:
             os.kill(lt["pid"], signal.SIGTERM)
         except OSError:
             pass
+    elif lt and reason == "pid reused":
+        print(dim(f"  skip local_tool stale pid {lt.get('pid')} (pid reused)"))
     # nats — from pid file
-    nats_pid_path = root / ".artha" / "run" / "nats.pid"
-    if nats_pid_path.exists():
+    nats_state = read_nats_state(root)
+    alive, reason = state_pid_matches(platform, nats_state)
+    if alive:
         try:
-            pid = int(nats_pid_path.read_text().strip())
-            if platform.pid_is_alive(pid):
-                print(dim(f"  kill nats pid {pid}"))
-                os.kill(pid, signal.SIGTERM)
-        except (OSError, ValueError):
+            pid = nats_state["pid"]
+            print(dim(f"  kill nats pid {pid}"))
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
             pass
+    elif nats_state and reason == "pid reused":
+        print(dim(f"  skip nats stale pid {nats_state.get('pid')} (pid reused)"))
     time.sleep(1.0)
 
 
@@ -196,7 +226,7 @@ def run(args) -> int:
 
     # 1. NATS
     print(bold("[1/3] nats") + f"        starting (port {nats_port})...", end="", flush=True)
-    _start_nats(root)
+    _start_nats(root, platform)
     _poll(lambda: _tcp_open("localhost", nats_port), READINESS_TIMEOUT_S, f"nats :{nats_port}")
     print(" " + green("ready"))
 
@@ -207,8 +237,15 @@ def run(args) -> int:
     def _health_ok() -> bool:
         try:
             r = httpx.get(f"http://{lt_host}:{lt_port}/api/health", timeout=0.5)
-            return r.status_code == 200
+            if r.status_code != 200:
+                return False
+            payload = r.json()
+            # WARNING: this also protects against an old/foreign local_tool
+            # already listening on the same port after uvicorn bind failure.
+            return payload.get("service") == "artha-local-tool" and payload.get("home") == str(root)
         except httpx.RequestError:
+            return False
+        except ValueError:
             return False
 
     _poll(_health_ok, READINESS_TIMEOUT_S, f"local_tool :{lt_port}")
