@@ -1,8 +1,9 @@
-"""artha push / pull / clone — wrappers over POST /api/sync/execute."""
+"""artha push / pull / clone — CLI wrappers over the local sync engine."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 
@@ -10,7 +11,7 @@ from cli.common import find_repo_root, local_tool_url, die, dim
 
 
 def _post_execute(url: str, body: dict, timeout: float = 1800.0) -> dict:
-    """One long-blocking call. Sync has no progress-over-HTTP today (see to-do)."""
+    """One long-blocking call. Sync has no progress stream today (see to-do)."""
     try:
         resp = httpx.post(f"{url}/api/sync/execute", json=body, timeout=timeout)
     except httpx.RequestError as exc:
@@ -35,7 +36,7 @@ def run(args) -> int:
             "entity_type": "project",
             "entity_id": args.project_id,
         }
-        print(dim(f"cloning {args.project_id} — no progress feedback over HTTP today, this may take minutes"))
+        print(dim(f"cloning {args.project_id} — no progress stream today, this may take minutes"))
     else:
         body = {
             "operation": op,
@@ -47,6 +48,16 @@ def run(args) -> int:
         print(dim(f"{op}ing {args.entity_type} {args.entity_id} — may take minutes for large entities"))
 
     result = _post_execute(url, body)
+
+    if getattr(args, "output", None):
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
+        print(dim(f"wrote sync result: {output_path}"))
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2, default=str))
+        return 0
 
     # Condensed summary. Full dump available via `--json`? keep simple for v1.
     summary_keys = ("success", "created", "patched", "uploaded", "copied", "id_remaps", "warnings")

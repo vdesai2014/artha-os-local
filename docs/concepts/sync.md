@@ -4,6 +4,10 @@
 Three operations: **push**, **pull**, **clone**. That's the whole
 surface.
 
+Agents should normally use the CLI (`artha push`, `artha pull`,
+`artha clone`). This doc explains the backing sync engine and HTTP API
+for debugging or advanced integrations.
+
 ## Not git
 
 It is tempting to reach for git analogies. Resist them.
@@ -63,16 +67,30 @@ project/run files. Not episodes or manifests.
 
 ## id_remaps
 
-Clone mints new IDs. The mapping lives on the returned `SyncPlan`:
+Clone mints new IDs at execution time. A clone plan is structural: it
+reports which source IDs require remapping, but does not reserve or mint
+the concrete target IDs.
+
+Normal agent workflow:
+
+```bash
+artha clone <public_project_id> --output /tmp/clone-result.json
+python3 -c "import json; print(json.load(open('/tmp/clone-result.json'))['id_remaps'])"
+```
+
+Internal/API flow:
 
 ```python
 plan = plan_sync(ctx, operation="clone", entity_type="project", entity_id=<public_project_id>)
-old_to_new = plan.id_remaps   # {"projects": {...}, "runs": {...}}
+plan.required_id_remaps       # {"projects": ["proj_..."], "runs": ["run_..."]}
+plan.id_remaps                # {}
 result = execute_sync_plan(ctx, plan, config)
+old_to_new = result.plan.id_remaps
 ```
 
-`SyncResult.to_dict()` also surfaces `id_remaps`, so HTTP callers of
-`/api/sync/execute` get them in the response.
+`SyncResult.to_dict()` surfaces execution's authoritative `id_remaps`.
+Only bypass the CLI if you are intentionally building an API client or
+debugging the sync boundary.
 
 **Rewrite `services.yaml` after clone.** The old cloud IDs still appear
 in paths and env vars (`workspace/<name>__<short_id>/…`,
@@ -113,8 +131,8 @@ result = execute_sync_plan(ctx, plan, config)
 
 Convenience wrappers (`sync_project_to_cloud`,
 `pull_project_from_cloud`, etc.) compose plan+execute for the common
-cases. Use them unless you need the id_remaps on clone or want to
-inspect the plan first.
+cases. CLI commands use these boundaries; call the Python functions
+directly only when debugging or building another integration.
 
 ## Credentials
 

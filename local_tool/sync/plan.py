@@ -7,7 +7,6 @@ skeleton creation should go through store APIs rather than direct file writes.
 """
 
 from ..io import StoreError
-from ..ids import generate_id
 from ..models import LocalEpisode, LocalManifest, LocalProject, LocalRun
 from ..store import episodes, manifests, projects, runs
 from ..store.projects import StoreCtx
@@ -160,8 +159,6 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
     ]
     source_runs = sorted(source_runs, key=lambda run: (_run_depth(run, source_runs), run.created_at, run.id))
 
-    target_project_id = generate_id("proj")
-    run_id_remap = {run.id: generate_id("run") for run in source_runs}
     plan = SyncPlan(
         request=request,
         scope=SyncScope(
@@ -171,15 +168,15 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
             runs=source_runs,
         ),
     )
-    plan.id_remaps = {
-        "projects": {source_project.id: target_project_id},
-        "runs": dict(run_id_remap),
+    plan.required_id_remaps = {
+        "projects": [source_project.id],
+        "runs": [run.id for run in source_runs],
     }
     plan.metadata_actions.append(
         MetadataAction(
             "create_local_clone",
             "project",
-            target_project_id,
+            source_project.id,
             {
                 "source_project_id": source_project.id,
                 "name": source_project.name,
@@ -198,7 +195,7 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
             FileAction(
                 "copy",
                 "project",
-                target_project_id,
+                source_project.id,
                 path,
                 int(meta.get("size", 0)),
                 source_entity_id=source_project.id,
@@ -208,17 +205,15 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
 
     for run in source_runs:
         source_run_raw = source_run_details[run.id]
-        target_run_id = run_id_remap[run.id]
-        target_parent_id = run_id_remap.get(run.parent_id) if run.parent_id is not None else None
         plan.metadata_actions.append(
             MetadataAction(
                 "create_local_clone",
                 "run",
-                target_run_id,
+                run.id,
                 {
                     "source_run_id": run.id,
-                    "project_id": target_project_id,
-                    "parent_id": target_parent_id,
+                    "project_id": source_project.id,
+                    "parent_id": run.parent_id,
                     "name": run.name,
                     "created_at": run.created_at.isoformat(),
                     "updated_at": run.updated_at.isoformat(),
@@ -230,7 +225,7 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
                 FileAction(
                     "copy",
                     "run",
-                    target_run_id,
+                    run.id,
                     path,
                     int(meta.get("size", 0)),
                     source_entity_id=run.id,

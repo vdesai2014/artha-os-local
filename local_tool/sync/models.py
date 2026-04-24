@@ -68,6 +68,7 @@ class SyncPlan:
     file_actions: list[FileAction] = field(default_factory=list)
     link_actions: list[LinkAction] = field(default_factory=list)
     id_remaps: dict[str, dict[str, str]] = field(default_factory=dict)
+    required_id_remaps: dict[str, list[str]] = field(default_factory=dict)
     ignored_file_paths: dict[str, list[str]] = field(default_factory=dict)
     ignore_patterns: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -91,6 +92,7 @@ class SyncPlan:
             },
             "ignore_patterns": list(self.ignore_patterns),
             "id_remaps": self.id_remaps,
+            "required_id_remaps": self.required_id_remaps,
             "warnings": list(self.warnings),
         }
 

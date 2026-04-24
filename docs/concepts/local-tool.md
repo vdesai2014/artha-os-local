@@ -48,8 +48,8 @@ the graph shape.
 | User asks for | Agent calls |
 |---------------|-------------|
 | "create a run", "rename this manifest", "mark episode reward=1", "attach these episodes" | STORE HTTP endpoints (`/api/projects/*`, `/api/runs/*`, `/api/manifests/*`, `/api/episodes/*`) |
-| "push my project to cloud", "pull the latest data", "clone that public project" | SYNC endpoints (`/api/sync/plan`, `/api/sync/execute`) or direct Python: `plan_sync` + `execute_sync_plan` |
-| Anything the HTTP surface doesn't cover | Raw cloud API (see `concepts/cloud.md`) |
+| "push my project to cloud", "pull the latest data", "clone that public project" | CLI: `artha push`, `artha pull`, `artha clone` |
+| Anything the CLI/HTTP surface doesn't cover | Raw cloud API or sync internals (see `concepts/cloud.md` and `concepts/sync.md`) |
 
 ## What lives where
 

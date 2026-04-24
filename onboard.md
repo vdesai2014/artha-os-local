@@ -91,29 +91,14 @@ frontend loads.
 ## 3. Clone The Grasp-Pickup Demo
 
 Explain that the next step downloads the public demo project and checkpoints
-from artha.bot. It may take several minutes and the sync endpoint currently
+from artha.bot. It may take several minutes and `artha clone` currently
 has no progress stream.
 
-Use `/api/sync/execute`, not `/api/sync/plan`, because execute remaps are
-the authoritative local IDs.
+Use `artha clone`. Do not use `/api/sync/plan` for local IDs: plan is
+structural and clone output contains the authoritative execution remaps.
 
 ```bash
-python3 - <<'PY'
-import json
-import httpx
-
-body = {
-    "operation": "clone",
-    "entity_type": "project",
-    "entity_id": "proj_e5509f6a7a0443eb913be950c6a0fac9",
-}
-resp = httpx.post("http://127.0.0.1:8000/api/sync/execute", json=body, timeout=1800.0)
-resp.raise_for_status()
-result = resp.json()
-with open("/tmp/artha-grasp-clone.json", "w") as f:
-    json.dump(result, f, indent=2)
-print(json.dumps(result.get("id_remaps", {}), indent=2))
-PY
+artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/artha-grasp-clone.json
 ```
 
 Save the output mentally and on disk. The file

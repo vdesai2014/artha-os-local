@@ -71,7 +71,7 @@ file is a grep-friendly index — design intent lives in
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST   | `/api/sync/plan` | build a `SyncPlan` without side effects (includes `id_remaps` for clone) |
+| POST   | `/api/sync/plan` | build a `SyncPlan` without side effects (`required_id_remaps`, not concrete clone IDs) |
 | POST   | `/api/sync/execute` | execute the plan (push/pull/clone for project/run/manifest) |
 
 Body fields for both: `operation` (`push`/`pull`/`clone`), `entity_type`

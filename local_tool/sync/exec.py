@@ -8,6 +8,7 @@ creation goes through store APIs, not ad hoc filesystem writes.
 
 from pathlib import Path, PurePosixPath
 
+from ..ids import generate_id
 from ..store import episodes, manifests, projects, runs
 from ..store.projects import StoreCtx
 from .cloud_portal import CloudPortal, CloudSyncConfig
@@ -28,6 +29,29 @@ def _safe_download_path(base_dir: Path, relative_path: str, *, entity_type: str)
     if base not in target.parents:
         raise SyncExecError(f"Cloud {entity_type} file path escapes local store root: {relative_path!r}")
     return target
+
+
+def _ensure_clone_id_remaps(plan: SyncPlan) -> dict[str, dict[str, str]]:
+    """Mint execution-time clone IDs if the plan is structural.
+
+    `/sync/plan` intentionally does not mint concrete clone IDs. Direct
+    execution builds that same structural plan, then this boundary function
+    assigns the authoritative local IDs used for store creation and path
+    rewrites.
+    """
+    if plan.id_remaps.get("projects") and plan.id_remaps.get("runs") is not None:
+        return plan.id_remaps
+
+    if plan.scope.project is None:
+        raise SyncExecError("Clone execution requires a project in scope")
+
+    run_ids = [run.id for run in plan.scope.runs]
+    remaps = {
+        "projects": {plan.scope.project.id: generate_id("proj")},
+        "runs": {run_id: generate_id("run") for run_id in run_ids},
+    }
+    plan.id_remaps = remaps
+    return remaps
 
 
 def execute_sync_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig | None = None) -> SyncResult:
@@ -229,6 +253,13 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
     )
     if project_action is None:
         raise SyncExecError("Clone execution requires a project clone action")
+    id_remaps = _ensure_clone_id_remaps(plan)
+    project_remaps = id_remaps.get("projects", {})
+    run_remaps = id_remaps.get("runs", {})
+    source_project_id = project_action.payload.get("source_project_id") or project_action.entity_id
+    target_project_id = project_remaps.get(source_project_id)
+    if target_project_id is None:
+        raise SyncExecError(f"Missing clone project remap for {source_project_id}")
 
     target_project = projects.create_project(
         ctx,
@@ -236,7 +267,7 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
         description=project_action.payload.get("description"),
         tags=project_action.payload.get("tags"),
         is_public=bool(project_action.payload.get("is_public", False)),
-        project_id=project_action.entity_id,
+        project_id=target_project_id,
         created_at=project_action.payload.get("created_at"),
         updated_at=project_action.payload.get("updated_at"),
     )
@@ -249,12 +280,18 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
         if action.operation == "create_local_clone" and action.entity_type == "run"
     ]
     for action in run_actions:
+        source_run_id = action.payload.get("source_run_id") or action.entity_id
+        target_run_id = run_remaps.get(source_run_id)
+        if target_run_id is None:
+            raise SyncExecError(f"Missing clone run remap for {source_run_id}")
+        source_parent_id = action.payload.get("parent_id")
+        target_parent_id = run_remaps.get(source_parent_id) if source_parent_id is not None else None
         cloned_run = runs.create_run(
             ctx,
-            project_id=action.payload["project_id"],
+            project_id=target_project_id,
             name=action.payload["name"],
-            parent_id=action.payload.get("parent_id"),
-            run_id=action.entity_id,
+            parent_id=target_parent_id,
+            run_id=target_run_id,
             created_at=action.payload.get("created_at"),
             updated_at=action.payload.get("updated_at"),
         )
@@ -287,16 +324,22 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
                 continue
             if action.entity_type == "project":
                 url = project_urls[action.source_path]
+                target_entity_id = project_remaps.get(action.source_entity_id)
+                if target_entity_id is None:
+                    raise SyncExecError(f"Missing clone project remap for {action.source_entity_id}")
                 target_path = _safe_download_path(
-                    projects.get_project_dir(ctx, action.entity_id),
+                    projects.get_project_dir(ctx, target_entity_id),
                     action.path,
                     entity_type="project",
                 )
                 copied["project_files"] += 1
             elif action.entity_type == "run":
                 url = run_urls[action.source_entity_id][action.source_path]
+                target_entity_id = run_remaps.get(action.source_entity_id)
+                if target_entity_id is None:
+                    raise SyncExecError(f"Missing clone run remap for {action.source_entity_id}")
                 target_path = _safe_download_path(
-                    runs.get_run_dir(ctx, action.entity_id),
+                    runs.get_run_dir(ctx, target_entity_id),
                     action.path,
                     entity_type="run",
                 )
@@ -306,7 +349,7 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_bytes(portal.download_bytes(url))
             events.append(
-                f"local copy {action.entity_type} {action.source_entity_id}:{action.source_path} -> {action.entity_id}:{action.path}"
+                f"local copy {action.entity_type} {action.source_entity_id}:{action.source_path} -> {target_entity_id}:{action.path}"
             )
 
     return SyncResult(

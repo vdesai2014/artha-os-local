@@ -96,8 +96,8 @@ Memory tier cheat sheet:
 | Add a new frontend page | `frontend/src/features/<name>/` + route in `frontend/src/app/router.tsx` |
 | Set eval provenance | NATS `provenance.override.set` (future: `artha provenance set`) |
 | Patch an episode reward | `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}` |
-| Clone a public project | `POST /api/sync/execute` with `operation="clone"` |
-| Push local state to cloud | `POST /api/projects/{id}/sync` (or `/api/runs/{id}/sync`, `/api/manifests/{id}/sync`) |
+| Clone a public project | `artha clone <project_id> --output /tmp/clone-result.json` |
+| Push/pull local state | `artha push project <id>` / `artha pull project <id>` |
 
 ## Hard invariants
 
@@ -110,8 +110,9 @@ Memory tier cheat sheet:
 - **Supervisor session lease.** If the supervisor dies, every wrapper
   exits within ~3s. No orphan processes. Treat the supervisor as the
   single parent for everything under `services.yaml`.
-- **Clone's id_remaps from `/api/sync/plan` are unstable.** Use only
-  the `id_remaps` returned from `/api/sync/execute`.
+- **Clone IDs are minted by execution.** `artha clone` returns the
+  authoritative `id_remaps`. `/api/sync/plan` is structural and reports
+  `required_id_remaps`, not concrete target IDs.
 - **Clone is not idempotent.** Re-running creates a second copy.
   Cleanup: `rm -rf workspace/<name>__*` before retry.
 - **Cloud project names are unique per owner.** A fresh clone renamed
@@ -160,10 +161,10 @@ pause and ask.
 3. The manifest's `success_rate` rollup updates automatically.
 
 **Cloning a public project:**
-1. `POST /api/sync/execute` with `operation="clone"`. Wait (no progress
-   over HTTP today — mention this to the user if they ask why it's
-   slow).
-2. Capture `id_remaps` from the response.
+1. Run `artha clone <project_id> --output /tmp/clone-result.json`.
+   Wait; sync currently has no progress stream, so mention the expected
+   delay before starting.
+2. Capture `id_remaps` from the output file.
 3. Rewrite `services.yaml` paths + `SOURCE_PROJECT_ID` / `SOURCE_RUN_ID`
    env vars.
 4. Overlay any `frontend/*.tsx` files the project ships.
@@ -185,8 +186,8 @@ pause and ask.
   we already have dataset manifests (`LocalManifest`).
 - Don't push from a clone expecting to merge back to the source —
   clone mints fresh IDs, so push creates a *new* cloud project.
-- Don't trust `/api/sync/plan`'s `id_remaps` for clone — regenerated on
-  every call. Only `/api/sync/execute`'s response is authoritative.
+- Don't expect `/api/sync/plan` to tell you clone target IDs. It only
+  reports which IDs need remapping; `artha clone` output is authoritative.
 - Don't write camera frames from Python for real hardware. The Rust
   `camera-service` exists because 30 fps decode + SHM write on Python
   drops frames.

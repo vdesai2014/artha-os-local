@@ -69,6 +69,8 @@ def _add_pull(sp) -> None:
 def _add_clone(sp) -> None:
     p = sp.add_parser("clone", help="clone a cloud project with fresh local IDs")
     p.add_argument("project_id")
+    p.add_argument("--output", help="write full sync result JSON to this path")
+    p.add_argument("--json", action="store_true", help="print full sync result JSON")
 
 
 def _add_provenance(sp) -> None:

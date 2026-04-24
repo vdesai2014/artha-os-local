@@ -80,11 +80,11 @@ manifest, many contributors.
 
 There is no `/clone` endpoint. Cloning a project reads it + its runs via
 GET, mints fresh local IDs, and creates entities in the local store. The
-sync tool does this end-to-end; when it lands, the CLI will too. Until
-then, call `plan_sync(operation="clone", ...)` +
-`execute_sync_plan(plan, config)` directly — and capture
-`plan.id_remaps` *before* executing so you can rewrite `services.yaml`
-paths that reference the old IDs.
+sync tool does this end-to-end. Clone plans are structural: `/api/sync/plan`
+returns `required_id_remaps`, but does not mint concrete IDs. Agents should
+use `artha clone` and capture the returned `id_remaps` before rewriting
+`services.yaml` paths that reference old IDs. Only bypass the CLI for
+intentional API integrations that need the same lower-level boundary.
 
 ## Full spec
 

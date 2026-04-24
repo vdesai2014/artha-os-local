@@ -128,25 +128,19 @@ ARTHA_HOME=$(pwd) python3 -m uvicorn local_tool.server.app:app \
 sleep 2
 curl -sS http://127.0.0.1:8000/api/health   # expect {"status":"ok",...}
 
-# Clone via the HTTP API (no auth required for public projects).
+# Clone via the CLI (no auth required for public projects).
 # Expect ~10 minutes on a decent connection; there is currently no
-# progress feedback — the request just blocks until done.
-curl -sS -X POST http://127.0.0.1:8000/api/sync/execute \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "operation": "clone",
-    "entity_type": "project",
-    "entity_id": "proj_e5509f6a7a0443eb913be950c6a0fac9"
-  }' > /tmp/clone-result.json
+# progress feedback — the command blocks until done.
+artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/clone-result.json
 
 # Grab the id_remaps — THIS is the authoritative remap, not /sync/plan's.
 python3 -c "import json; print(json.dumps(json.load(open('/tmp/clone-result.json'))['id_remaps'], indent=2))"
 ```
 
 **Known friction** (see `to-do.md`):
-- `/api/sync/plan` and `/api/sync/execute` each regenerate fresh IDs;
-  only /execute's `id_remaps` is authoritative.
-- Clone has no progress feedback over HTTP.
+- `/api/sync/plan` is structural for clone and reports only
+  `required_id_remaps`; only `artha clone` output has concrete IDs.
+- Clone has no progress stream yet.
 - Clone is not idempotent — re-running creates a second copy. Clean
   up with `rm -rf workspace/grasp-pickup__*` before retrying.
 
