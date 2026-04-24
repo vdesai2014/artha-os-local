@@ -1,4 +1,8 @@
-# Agent Onboarding — artha-os
+# Machine Setup Reference — artha-os
+
+For the guided first-run product tour, start at `../onboard.md`. This file
+is the lower-level dependency and fallback reference for agents debugging a
+fresh machine.
 
 You are a coding agent on a fresh machine. Read this top-to-bottom, run the
 steps, and hand off to the user.
