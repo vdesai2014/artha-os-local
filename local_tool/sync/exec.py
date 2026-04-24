@@ -13,6 +13,7 @@ from ..store import episodes, manifests, projects, runs
 from ..store.projects import StoreCtx
 from .cloud_portal import CloudPortal, CloudSyncConfig
 from .models import SyncPlan, SyncResult
+from .progress import NoopSyncProgressReporter, SyncProgressReporter
 
 
 class SyncExecError(Exception):
@@ -54,30 +55,37 @@ def _ensure_clone_id_remaps(plan: SyncPlan) -> dict[str, dict[str, str]]:
     return remaps
 
 
-def execute_sync_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig | None = None) -> SyncResult:
+def execute_sync_plan(
+    ctx: StoreCtx,
+    plan: SyncPlan,
+    config: CloudSyncConfig | None = None,
+    *,
+    progress_reporter: SyncProgressReporter | None = None,
+) -> SyncResult:
     """Execute the currently supported sync flow."""
+    reporter = progress_reporter or NoopSyncProgressReporter()
     if plan.request.operation == "push":
         if plan.request.entity_type not in {"project", "run", "manifest"}:
             raise SyncExecError(f"Execution currently supports project/run/manifest push only, got {plan.request.entity_type}")
         if config is None:
             raise SyncExecError("Push execution requires cloud config")
-        return _execute_push_plan(ctx, plan, config)
+        return _execute_push_plan(ctx, plan, config, reporter)
     if plan.request.operation == "clone":
         if plan.request.entity_type != "project":
             raise SyncExecError(f"Execution currently supports project clone only, got {plan.request.entity_type}")
         if config is None:
             raise SyncExecError("Clone execution requires cloud config")
-        return _execute_clone_plan(ctx, plan, config)
+        return _execute_clone_plan(ctx, plan, config, reporter)
     if plan.request.operation == "pull":
         if plan.request.entity_type not in {"project", "run", "manifest"}:
             raise SyncExecError(f"Execution currently supports project/run/manifest pull only, got {plan.request.entity_type}")
         if config is None:
             raise SyncExecError("Pull execution requires cloud config")
-        return _execute_pull_plan(ctx, plan, config)
+        return _execute_pull_plan(ctx, plan, config, reporter)
     raise SyncExecError(f"Unsupported sync operation for now: {plan.request.operation}")
 
 
-def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -> SyncResult:
+def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, reporter: SyncProgressReporter) -> SyncResult:
     created = {"projects": 0, "runs": 0, "manifests": 0, "episodes": 0}
     patched = {"projects": 0, "runs": 0, "manifests": 0, "run_links": 0}
     uploaded = {"project_files": 0, "run_files": 0, "episode_files": 0}
@@ -97,9 +105,11 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
             events.append(f"metadata ensure project {project.id}")
             if portal.ensure_project(project):
                 created["projects"] += 1
+            reporter.event("metadata", "done", "ensure project", operation="ensure_remote", entity_type="project", entity_id=project.id)
             events.append(f"metadata patch project {project.id}")
             portal.patch_project(project)
             patched["projects"] += 1
+            reporter.event("metadata", "done", "patch project", operation="patch_remote", entity_type="project", entity_id=project.id)
 
             if plan.request.entity_type == "project":
                 events.append(f"files upload project {project.id}")
@@ -117,15 +127,27 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                     absolute_path_for=lambda relative_path: projects.get_project_file_path(ctx, project.id, relative_path),
                     upload_path=f"/api/projects/{project.id}/files/upload",
                     commit_path=f"/api/projects/{project.id}/files/commit",
+                    on_file_event=lambda status, path, size, project_id=project.id: reporter.event(
+                        "file",
+                        status,
+                        f"upload project {path}",
+                        operation="upload",
+                        entity_type="project",
+                        entity_id=project_id,
+                        path=path,
+                        size=size,
+                    ),
                 )
 
             for run in plan.scope.runs:
                 events.append(f"metadata ensure run {run.id}")
                 if portal.ensure_run(run):
                     created["runs"] += 1
+                reporter.event("metadata", "done", "ensure run", operation="ensure_remote", entity_type="run", entity_id=run.id)
                 events.append(f"metadata patch run {run.id}")
                 portal.patch_run(run, include_links=False)
                 patched["runs"] += 1
+                reporter.event("metadata", "done", "patch run", operation="patch_remote", entity_type="run", entity_id=run.id)
                 events.append(f"files upload run {run.id}")
                 allowed_run_paths = {
                     action.path
@@ -141,6 +163,16 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                     absolute_path_for=lambda relative_path, run_id=run.id: runs.get_run_file_path(ctx, run_id, relative_path),
                     upload_path=f"/api/runs/{run.id}/files/upload",
                     commit_path=f"/api/runs/{run.id}/files/commit",
+                    on_file_event=lambda status, path, size, run_id=run.id: reporter.event(
+                        "file",
+                        status,
+                        f"upload run {path}",
+                        operation="upload",
+                        entity_type="run",
+                        entity_id=run_id,
+                        path=path,
+                        size=size,
+                    ),
                 )
 
         synced_manifest_ids: set[str] = set()
@@ -148,11 +180,13 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
             events.append(f"metadata ensure manifest {manifest.id}")
             if portal.ensure_manifest(manifest):
                 created["manifests"] += 1
+            reporter.event("metadata", "done", "ensure manifest", operation="ensure_remote", entity_type="manifest", entity_id=manifest.id)
             events.append(f"metadata patch manifest {manifest.id}")
             portal.patch_manifest(manifest)
             patched["manifests"] += 1
+            reporter.event("metadata", "done", "patch manifest", operation="patch_remote", entity_type="manifest", entity_id=manifest.id)
 
-            episode_result = _sync_manifest_episodes(ctx, portal, manifest.id, events)
+            episode_result = _sync_manifest_episodes(ctx, portal, manifest.id, events, reporter)
             synced_manifest_ids.add(manifest.id)
             created["episodes"] += episode_result["created_episodes"]
             uploaded["episode_files"] += episode_result["uploaded_files"]
@@ -173,6 +207,7 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 events.append(f"links patch run {run.id}")
                 portal.patch_run(run, include_links=True, allowed_manifest_ids=synced_manifest_ids)
                 patched["run_links"] += 1
+                reporter.event("link", "done", "patch run links", operation="patch_run_links", entity_type="run", entity_id=run.id)
 
     return SyncResult(
         success=True,
@@ -187,11 +222,26 @@ def _execute_push_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
     )
 
 
-def _sync_manifest_episodes(ctx: StoreCtx, portal: CloudPortal, manifest_id: str, events: list[str]) -> dict[str, int]:
+def _sync_manifest_episodes(
+    ctx: StoreCtx,
+    portal: CloudPortal,
+    manifest_id: str,
+    events: list[str],
+    reporter: SyncProgressReporter,
+) -> dict[str, int]:
     """Upload manifest episodes and attach them to the remote manifest."""
     manifest = manifests.get_manifest(ctx, manifest_id)
     local_episodes = manifests.list_manifest_episodes(ctx, manifest_id)
     if not local_episodes:
+        reporter.event(
+            "link",
+            "done",
+            "attach manifest episodes",
+            operation="attach_manifest_episodes",
+            entity_type="manifest",
+            entity_id=manifest.id,
+            episode_count=0,
+        )
         return {"created_episodes": 0, "uploaded_files": 0}
 
     events.append(f"episodes plan manifest {manifest_id} count={len(local_episodes)}")
@@ -219,16 +269,57 @@ def _sync_manifest_episodes(ctx: StoreCtx, portal: CloudPortal, manifest_id: str
 
     uploaded_files = 0
     pending_upload_ids: list[str] = []
+    planned_upload_paths = {
+        (episode_id, relative_path)
+        for episode_id, entry in upload_response.get("new", {}).items()
+        for relative_path in entry.get("files", {})
+    }
+    for episode in local_episodes:
+        for relative_path, meta in episode.files.items():
+            if (episode.id, relative_path) in planned_upload_paths:
+                continue
+            reporter.event(
+                "file",
+                "skipped",
+                f"upload episode {relative_path}",
+                operation="upload",
+                entity_type="episode",
+                entity_id=episode.id,
+                path=relative_path,
+                size=int(meta.get("size", 0)),
+            )
     for episode_id, entry in upload_response.get("new", {}).items():
         for relative_path, plan in entry.get("files", {}).items():
             absolute_path = episodes.get_episode_file_path(ctx, episode_id, relative_path)
+            size = int(absolute_path.stat().st_size)
+            reporter.event(
+                "file",
+                "started",
+                f"upload episode {relative_path}",
+                operation="upload",
+                entity_type="episode",
+                entity_id=episode_id,
+                path=relative_path,
+                size=size,
+            )
             portal._upload_file_to_presigned_target(absolute_path, plan)
+            reporter.event(
+                "file",
+                "done",
+                f"upload episode {relative_path}",
+                operation="upload",
+                entity_type="episode",
+                entity_id=episode_id,
+                path=relative_path,
+                size=size,
+            )
             uploaded_files += 1
             events.append(f"episodes upload {episode_id}:{relative_path}")
         pending_upload_ids.extend(entry.get("pending_upload_ids", []))
 
     portal.commit_episode_uploads(pending_upload_ids)
     portal.add_manifest_episodes(manifest.id, [episode.id for episode in local_episodes])
+    reporter.event("link", "done", "attach manifest episodes", operation="attach_manifest_episodes", entity_type="manifest", entity_id=manifest.id)
     events.append(f"episodes attach manifest {manifest.id}")
     return {
         "created_episodes": len(upload_response.get("new", {})),
@@ -236,7 +327,7 @@ def _sync_manifest_episodes(ctx: StoreCtx, portal: CloudPortal, manifest_id: str
     }
 
 
-def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -> SyncResult:
+def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, reporter: SyncProgressReporter) -> SyncResult:
     created = {"projects": 0, "runs": 0, "manifests": 0, "episodes": 0}
     patched = {"projects": 0, "runs": 0, "manifests": 0, "run_links": 0}
     uploaded = {"project_files": 0, "run_files": 0, "episode_files": 0}
@@ -272,6 +363,7 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
         updated_at=project_action.payload.get("updated_at"),
     )
     created["projects"] += 1
+    reporter.event("metadata", "done", "create local project", operation="create_local_clone", entity_type="project", entity_id=target_project.id)
     events.append(f"local create project {target_project.id}")
 
     run_actions = [
@@ -296,6 +388,7 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
             updated_at=action.payload.get("updated_at"),
         )
         created["runs"] += 1
+        reporter.event("metadata", "done", "create local run", operation="create_local_clone", entity_type="run", entity_id=cloned_run.id)
         events.append(f"local create run {cloned_run.id}")
 
     with CloudPortal(config) as portal:
@@ -347,7 +440,31 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
             else:
                 raise SyncExecError(f"Unsupported clone file entity type: {action.entity_type}")
             target_path.parent.mkdir(parents=True, exist_ok=True)
+            reporter.event(
+                "file",
+                "started",
+                f"copy {action.entity_type} {action.path}",
+                operation="copy",
+                entity_type=action.entity_type,
+                entity_id=target_entity_id,
+                source_entity_id=action.source_entity_id,
+                path=action.path,
+                source_path=action.source_path,
+                size=action.size,
+            )
             target_path.write_bytes(portal.download_bytes(url))
+            reporter.event(
+                "file",
+                "done",
+                f"copy {action.entity_type} {action.path}",
+                operation="copy",
+                entity_type=action.entity_type,
+                entity_id=target_entity_id,
+                source_entity_id=action.source_entity_id,
+                path=action.path,
+                source_path=action.source_path,
+                size=action.size,
+            )
             events.append(
                 f"local copy {action.entity_type} {action.source_entity_id}:{action.source_path} -> {target_entity_id}:{action.path}"
             )
@@ -365,7 +482,7 @@ def _execute_clone_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) 
     )
 
 
-def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -> SyncResult:
+def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, reporter: SyncProgressReporter) -> SyncResult:
     created = {"projects": 0, "runs": 0, "manifests": 0, "episodes": 0}
     patched = {"projects": 0, "runs": 0, "manifests": 0, "run_links": 0}
     uploaded = {"project_files": 0, "run_files": 0, "episode_files": 0}
@@ -393,6 +510,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 updated_at=project_action.payload.get("updated_at"),
             )
             created["projects"] += 1
+            reporter.event("metadata", "done", "create local project", operation="create_local", entity_type="project", entity_id=project_action.entity_id)
             events.append(f"local create project {project_action.entity_id}")
         else:
             projects.update_project(
@@ -406,6 +524,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 updated_at=project_action.payload.get("updated_at"),
             )
             patched["projects"] += 1
+            reporter.event("metadata", "done", "update local project", operation="update_local", entity_type="project", entity_id=project_action.entity_id)
             events.append(f"local update project {project_action.entity_id}")
 
     run_actions = [
@@ -426,6 +545,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 updated_at=action.payload.get("updated_at"),
             )
             created["runs"] += 1
+            reporter.event("metadata", "done", "create local run", operation="create_local", entity_type="run", entity_id=action.entity_id)
             events.append(f"local create run {action.entity_id}")
         else:
             run_updates = {
@@ -437,6 +557,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 run_updates["links"] = action.payload["links"]
             runs.update_run(ctx, action.entity_id, **run_updates)
             patched["runs"] += 1
+            reporter.event("metadata", "done", "update local run", operation="update_local", entity_type="run", entity_id=action.entity_id)
             events.append(f"local update run {action.entity_id}")
 
     manifest_actions = [action for action in plan.metadata_actions if action.entity_type == "manifest"]
@@ -459,6 +580,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 updated_at=action.payload.get("updated_at"),
             )
             created["manifests"] += 1
+            reporter.event("metadata", "done", "create local manifest", operation="create_local", entity_type="manifest", entity_id=action.entity_id)
             events.append(f"local create manifest {action.entity_id}")
         else:
             manifest_updates = {
@@ -475,6 +597,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
             }
             manifests.update_manifest(ctx, action.entity_id, **manifest_updates)
             patched["manifests"] += 1
+            reporter.event("metadata", "done", "update local manifest", operation="update_local", entity_type="manifest", entity_id=action.entity_id)
             events.append(f"local update manifest {action.entity_id}")
 
     episode_actions = [action for action in plan.metadata_actions if action.entity_type == "episode"]
@@ -493,6 +616,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 created_at=action.payload.get("created_at"),
             )
             created["episodes"] += 1
+            reporter.event("metadata", "done", "create local episode", operation="create_local", entity_type="episode", entity_id=action.entity_id)
             events.append(f"local create episode {action.entity_id}")
         else:
             episode_updates = {
@@ -505,6 +629,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
                 "source_run_id": action.payload.get("source_run_id"),
             }
             episodes.update_episode(ctx, action.entity_id, **episode_updates)
+            reporter.event("metadata", "done", "update local episode", operation="update_local", entity_type="episode", entity_id=action.entity_id)
             events.append(f"local update episode {action.entity_id}")
 
     with CloudPortal(config) as portal:
@@ -576,7 +701,31 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
             else:
                 raise SyncExecError(f"Unsupported pull file entity type: {action.entity_type}")
             target_path.parent.mkdir(parents=True, exist_ok=True)
+            reporter.event(
+                "file",
+                "started",
+                f"download {action.entity_type} {action.path}",
+                operation="download",
+                entity_type=action.entity_type,
+                entity_id=action.entity_id,
+                source_entity_id=action.source_entity_id,
+                path=action.path,
+                source_path=action.source_path,
+                size=action.size,
+            )
             target_path.write_bytes(portal.download_bytes(url))
+            reporter.event(
+                "file",
+                "done",
+                f"download {action.entity_type} {action.path}",
+                operation="download",
+                entity_type=action.entity_type,
+                entity_id=action.entity_id,
+                source_entity_id=action.source_entity_id,
+                path=action.path,
+                source_path=action.source_path,
+                size=action.size,
+            )
             events.append(
                 f"local download {action.entity_type} {action.source_entity_id}:{action.source_path} -> {action.entity_id}:{action.path}"
             )
@@ -585,6 +734,7 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig) -
         if action.operation != "attach_manifest_episodes_local":
             continue
         manifests.add_manifest_episodes(ctx, action.entity_id, action.payload.get("episode_ids", []))
+        reporter.event("link", "done", "attach manifest episodes local", operation=action.operation, entity_type=action.entity_type, entity_id=action.entity_id)
         events.append(f"local attach manifest {action.entity_id} episodes={len(action.payload.get('episode_ids', []))}")
 
     return SyncResult(

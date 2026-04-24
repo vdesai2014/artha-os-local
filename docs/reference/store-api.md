@@ -73,10 +73,14 @@ file is a grep-friendly index — design intent lives in
 |--------|------|---------|
 | POST   | `/api/sync/plan` | build a `SyncPlan` without side effects (`required_id_remaps`, not concrete clone IDs) |
 | POST   | `/api/sync/execute` | execute the plan (push/pull/clone for project/run/manifest) |
+| POST   | `/api/sync/jobs` | start a background sync job and write `.artha/run/sync/<job_id>.json` progress |
+| GET    | `/api/sync/jobs` | list recent sync progress files |
+| GET    | `/api/sync/jobs/{job_id}` | read one sync progress file |
 
-Body fields for both: `operation` (`push`/`pull`/`clone`), `entity_type`
+Body fields: `operation` (`push`/`pull`/`clone`), `entity_type`
 (`project`/`run`/`manifest`), `entity_id`, `include_links?`,
-`include_descendants?`, `cloud_api_base?`, `bearer_token?`.
+`include_descendants?`, `cloud_api_base?`, `bearer_token?`. Blocking
+`/api/sync/execute` also accepts `progress: true` to write a progress file.
 
 ## Proxies (not STORE API)
 

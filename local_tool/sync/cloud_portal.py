@@ -134,7 +134,15 @@ class CloudPortal:
             },
         )
 
-    def sync_entity_files(self, *, files: dict[str, dict], absolute_path_for, upload_path: str, commit_path: str) -> int:
+    def sync_entity_files(
+        self,
+        *,
+        files: dict[str, dict],
+        absolute_path_for,
+        upload_path: str,
+        commit_path: str,
+        on_file_event=None,
+    ) -> int:
         if not files:
             return 0
         upload_response = self._request_json(
@@ -151,8 +159,17 @@ class CloudPortal:
             },
         )
         uploaded_count = 0
-        for relative_path, plan in upload_response.get("to_upload", {}).items():
+        to_upload = upload_response.get("to_upload", {})
+        if on_file_event is not None:
+            for relative_path, meta in files.items():
+                if relative_path not in to_upload:
+                    on_file_event("skipped", relative_path, int(meta.get("size", 0)))
+        for relative_path, plan in to_upload.items():
+            if on_file_event is not None:
+                on_file_event("started", relative_path, int(files.get(relative_path, {}).get("size", 0)))
             self._upload_file_to_presigned_target(absolute_path_for(relative_path), plan)
+            if on_file_event is not None:
+                on_file_event("done", relative_path, int(files.get(relative_path, {}).get("size", 0)))
             uploaded_count += 1
         pending_upload_ids = upload_response.get("pending_upload_ids", [])
         if pending_upload_ids:

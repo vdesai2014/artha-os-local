@@ -145,9 +145,10 @@ class SyncResult:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
+    progress: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "success": self.success,
             "request": {
                 "operation": self.request.operation,
@@ -168,3 +169,6 @@ class SyncResult:
             "errors": self.errors,
             "events": self.events,
         }
+        if self.progress is not None:
+            payload["progress"] = self.progress
+        return payload

@@ -13,6 +13,7 @@ from .cloud_portal import SyncPortalError, resolve_cloud_sync_config
 from .exec import SyncExecError, execute_sync_plan
 from .models import SyncPlan, SyncRequest
 from .plan import SyncPlanError, build_sync_plan
+from .progress import NoopSyncProgressReporter, SyncProgressReporter
 
 
 class SyncError(Exception):
@@ -184,27 +185,43 @@ def execute_sync(
     include_descendants: bool = False,
     cloud_api_base: str | None = None,
     bearer_token: str | None = None,
+    progress_reporter: SyncProgressReporter | None = None,
 ) -> dict[str, Any]:
     """Execute a supported sync workflow directly from a request-like payload."""
-    plan = plan_sync(
-        ctx,
-        operation=operation,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        include_links=include_links,
-        include_descendants=include_descendants,
-        cloud_api_base=cloud_api_base,
-        bearer_token=bearer_token,
-    )
+    reporter = progress_reporter or NoopSyncProgressReporter()
     try:
+        reporter.planning()
+        plan = plan_sync(
+            ctx,
+            operation=operation,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            include_links=include_links,
+            include_descendants=include_descendants,
+            cloud_api_base=cloud_api_base,
+            bearer_token=bearer_token,
+        )
+        reporter.planned(plan)
         config = resolve_cloud_sync_config(
             cloud_api_base=cloud_api_base or plan.request.cloud_api_base,
             bearer_token=bearer_token or plan.request.bearer_token,
             require_token=operation == "push",
         )
-        return execute_sync_plan(ctx, plan, config).to_dict()
+        reporter.execution_started()
+        result = execute_sync_plan(ctx, plan, config, progress_reporter=reporter)
+        result.progress = reporter.ref()
+        payload = result.to_dict()
+        reporter.finish(payload)
+        return payload
     except (SyncPortalError, SyncExecError) as exc:
+        reporter.fail(exc)
         raise SyncError(str(exc)) from exc
+    except SyncError as exc:
+        reporter.fail(exc)
+        raise
+    except Exception as exc:
+        reporter.fail(exc)
+        raise
 
 
 def pull_project_from_cloud(

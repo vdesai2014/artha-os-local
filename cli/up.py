@@ -250,6 +250,8 @@ def run(args) -> int:
 
     _poll(_health_ok, READINESS_TIMEOUT_S, f"local_tool :{lt_port}")
     print(" " + green("ready") + dim(f"  http://{lt_host}:{lt_port}"))
+    if not (root / "frontend" / "dist" / "index.html").exists():
+        print(dim("  warning: frontend/dist missing; :8000 will serve backend only. Run `cd frontend && npm install && npm run build`, then restart."))
 
     # 3. supervisor
     print(bold("[3/3] supervisor") + "  starting...", end="", flush=True)
