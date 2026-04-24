@@ -1,0 +1,93 @@
+# services.yaml
+# ==============
+# Which processes the supervisor launches. Each top-level key becomes one
+# supervised child process; keys match the service name used for runtime
+# state files and logs.
+#
+# Keys per entry:
+#   cmd:  argv list. First token may be `python` / `python3` (gets swapped
+#         for the active interpreter) or a path to a compiled binary.
+#   env:  extra environment variables set on the child. ARTHA_* plus
+#         IPC_PUBLISHES / IPC_SUBSCRIBES are injected by the supervisor.
+#   ipc:  optional. Declares SHM topic names and their type_names (classes
+#         in core/types.py). Drives IPC_PUBLISHES / IPC_SUBSCRIBES env vars.
+#   type_check: optional bool. If true, supervisor runs `<cmd> --type-check`
+#         at boot and verifies Rust struct layouts match core/types.py.
+#
+# See docs/concepts/supervisor.md for the lifecycle model, and
+# docs/concepts/ipc.md for the three-tier memory-movement split.
+
+param_server:
+  cmd: ["python3", "services/param_server.py"]
+  env:
+    SERVICE_NAME: param_server
+    PARAM_FILE_PATH: "config/params.json"
+
+bridge:
+  cmd: ["python3", "services/bridge.py"]
+  env:
+    SERVICE_NAME: bridge
+
+
+# =============================================================================
+# Optional services — uncomment as you need them.
+# =============================================================================
+
+# video_bridge:
+#   cmd: ["./services/video_bridge/target/release/video-bridge"]
+#   env:
+#     SERVICE_NAME: video_bridge
+#     VIDEO_BRIDGE_PORT: "9090"
+#     VIDEO_BRIDGE_FPS: "30"
+#     VIDEO_BRIDGE_QUALITY: "80"
+#   ipc:
+#     subscribes:
+#       # List every CameraFrame topic you want browser-streamable:
+#       camera/overhead: CameraFrame
+#       camera/gripper: CameraFrame
+
+# provenance:
+#   # Resolves "current manifest / task / policy" from commander + inference
+#   # heartbeats. Required if you run the data_recorder.
+#   cmd: ["python3", "services/provenance.py"]
+#   env:
+#     SERVICE_NAME: provenance
+
+# commander:
+#   # State machine for robot command blending (policy_gate + sequences).
+#   # Requires core/types.py to define the command struct referenced below.
+#   cmd: ["python3", "-m", "services.commander"]
+#   env:
+#     SERVICE_NAME: commander
+#     LOOP_RATE_HZ: "100"
+#     POLICY_TOPIC: "inference/desired"
+#   ipc:
+#     publishes:
+#       robot/desired: RobStrideCommand    # rename to your command type
+#     subscribes:
+#       robot/actual: RobStrideState       # rename to your state type
+#       inference/desired: RobStrideCommand
+
+# data_recorder:
+#   # Buffers SHM sources during recording, writes an episode on stop.
+#   # Edit services/data_recorder/main.py SOURCES to pick what gets recorded.
+#   cmd: ["python3", "-m", "services.data_recorder"]
+#   env:
+#     SERVICE_NAME: data_recorder
+#     LOOP_RATE_HZ: "30"
+#   ipc:
+#     subscribes:
+#       robot/actual: RobStrideState
+#       robot/desired: RobStrideCommand
+#       camera/gripper: CameraFrame
+
+# camera_service:
+#   # Rust USB camera capture (V4L2). One instance per physical camera.
+#   cmd: ["./services/camera/target/release/camera-service"]
+#   env:
+#     SERVICE_NAME: camera_service
+#     CAMERA_DEVICE: "/dev/video0"
+#   ipc:
+#     publishes:
+#       camera/overhead: CameraFrame
+#   type_check: true

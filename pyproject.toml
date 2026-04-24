@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artha-os"
+version = "0.1.0"
+description = "Artha-OS — agent-first runtime for robot manipulation learning"
+requires-python = ">=3.11"
+dependencies = [
+    # Runtime core
+    "pyyaml>=6",
+    "nats-py>=2.0",
+    "iceoryx2>=0.8",
+    # local_tool
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.0",
+    "blake3>=1.0",
+    "httpx>=0.24",
+    # Bridge
+    "aiohttp>=3.9",
+    "websockets>=12",
+    "pillow>=10",
+    # Data recorder
+    "numpy>=1.24",
+    "pyarrow>=14",
+    "av>=11",
+]
+
+[project.scripts]
+artha = "cli.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["cli*", "core*", "local_tool*", "services*", "supervisor*"]

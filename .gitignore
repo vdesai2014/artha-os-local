@@ -1,0 +1,44 @@
+# Runtime state — regenerated every session
+.artha/
+logs/
+catalog.json
+catalog.json.lock
+
+# Workspace entities are runtime data, not code (projects/runs/manifests/episodes
+# live here once the user clones or starts recording). Keep the directory stubs
+# so fresh clones have the expected layout.
+workspace/*
+!workspace/episodes/
+!workspace/manifests/
+workspace/episodes/*
+workspace/manifests/*
+!workspace/episodes/.gitkeep
+!workspace/manifests/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+
+# Rust
+target/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Credentials — never commit
+.artha/credentials.json
