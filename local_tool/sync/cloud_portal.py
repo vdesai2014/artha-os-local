@@ -19,6 +19,16 @@ class SyncPortalError(Exception):
     pass
 
 
+def _response_detail(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            return payload.get("detail") or payload.get("error")
+    except Exception:
+        pass
+    return response.text or None
+
+
 @dataclass(frozen=True)
 class CloudSyncConfig:
     api_base: str
@@ -50,9 +60,13 @@ class CloudPortal:
             self._api_client.close()
 
     def ensure_project(self, project) -> bool:
-        return self._request_allow_conflict(
+        return self._request_create_or_existing_by_id(
             "POST",
             "/api/projects",
+            existing_path=f"/api/projects/{project.id}",
+            entity_type="project",
+            entity_id=project.id,
+            entity_name=project.name,
             json={
                 "id": project.id,
                 "name": project.name,
@@ -101,9 +115,13 @@ class CloudPortal:
 
     def ensure_manifest(self, manifest) -> bool:
         source_run_id = manifest.associated_runs[0].run_id if manifest.associated_runs else None
-        return self._request_allow_conflict(
+        return self._request_create_or_existing_by_id(
             "POST",
             "/api/manifests",
+            existing_path=f"/api/manifests/{manifest.id}",
+            entity_type="manifest",
+            entity_id=manifest.id,
+            entity_name=manifest.name,
             json={
                 "id": manifest.id,
                 "name": manifest.name,
@@ -297,6 +315,55 @@ class CloudPortal:
                 detail = response.text
             raise SyncPortalError(f"{method} {path} failed with {response.status_code}: {detail or 'request failed'}")
         return response.status_code == 201
+
+    def _request_create_or_existing_by_id(
+        self,
+        method: str,
+        path: str,
+        *,
+        existing_path: str,
+        entity_type: str,
+        entity_id: str,
+        entity_name: str,
+        json: dict,
+    ) -> bool:
+        """Create an entity, distinguishing ID-exists from name collision.
+
+        Cloud create endpoints return 409 for either duplicate ID or duplicate
+        owner/name. Only duplicate ID means this local entity already exists
+        remotely. A duplicate name with a different ID must be surfaced clearly;
+        otherwise the later PATCH by local ID fails with a misleading 404.
+        """
+        try:
+            response = self._require_api_client().request(method, path, json=json)
+        except httpx.RequestError as exc:
+            raise SyncPortalError(f"{method} {path} failed: {exc}") from exc
+
+        if response.status_code in (200, 201):
+            return response.status_code == 201
+
+        detail = _response_detail(response)
+        if response.status_code == 409:
+            try:
+                existing = self._require_api_client().get(existing_path)
+            except httpx.RequestError as exc:
+                raise SyncPortalError(f"GET {existing_path} failed after create conflict: {exc}") from exc
+            if existing.status_code == 200:
+                return False
+            if existing.status_code == 404:
+                raise SyncPortalError(
+                    f"Cloud {entity_type} create conflicted, but {entity_id} does not exist remotely. "
+                    f"A different cloud {entity_type} likely already uses the name {entity_name!r}. "
+                    f"Rename the local {entity_type} or rename/delete the cloud one, then sync again. "
+                    f"Cloud said: {detail or 'conflict'}"
+                )
+            existing_detail = _response_detail(existing)
+            raise SyncPortalError(
+                f"GET {existing_path} failed after create conflict with {existing.status_code}: "
+                f"{existing_detail or 'request failed'}"
+            )
+
+        raise SyncPortalError(f"{method} {path} failed with {response.status_code}: {detail or 'request failed'}")
 
     def _upload_file_to_presigned_target(self, absolute_path: Path, plan: dict[str, Any]) -> None:
         client = self._require_upload_client()
