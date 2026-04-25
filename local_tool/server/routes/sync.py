@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from ...io import StoreError
 from ...sync import SyncError, execute_sync, plan_sync
 from ...sync.models import SyncRequest
-from ...sync.progress import FileSyncProgressReporter, list_sync_jobs, read_sync_job
+from ...sync.progress import FileSyncProgressReporter, delete_sync_job, list_sync_jobs, read_sync_job
 from ...store.projects import StoreCtx
 from ..deps import get_ctx
 
@@ -132,3 +132,16 @@ def get_sync_job_route(job_id: str, ctx: StoreCtx = Depends(get_ctx)):
     if payload is None:
         raise HTTPException(status_code=404, detail="sync job not found")
     return payload
+
+
+@router.delete("/sync/jobs/{job_id}", status_code=204)
+def delete_sync_job_route(job_id: str, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        result = delete_sync_job(ctx.home, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="sync job not found")
+    if result == "not_terminal":
+        raise HTTPException(status_code=409, detail="Only succeeded or failed sync jobs can be deleted.")
+    return None

@@ -13,3 +13,7 @@ export function listSyncJobs(limit = 50) {
 export function getSyncJob(jobId: string) {
   return api.get<SyncJobPayload>(`/api/sync/jobs/${jobId}`)
 }
+
+export function deleteSyncJob(jobId: string) {
+  return api.delete<void>(`/api/sync/jobs/${jobId}`)
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { listSyncJobs } from '../api'
+import { deleteSyncJob, listSyncJobs } from '../api'
 import type { SyncJobEvent, SyncJobPayload } from '../types'
 
 function formatTime(value?: number | null) {
@@ -41,6 +41,10 @@ function statusClass(status: string) {
   return ''
 }
 
+function canDeleteJob(status: string) {
+  return status === 'succeeded' || status === 'failed'
+}
+
 function JobCard({ job, selected }: { job: SyncJobPayload; selected: boolean }) {
   return (
     <Link className={`sync-job-card ${selected ? 'selected' : ''}`} to={`/sync?job=${job.job_id}`}>
@@ -54,7 +58,7 @@ function JobCard({ job, selected }: { job: SyncJobPayload; selected: boolean }) 
   )
 }
 
-function JobDetail({ job }: { job: SyncJobPayload }) {
+function JobDetail({ deleting, job, onDelete }: { deleting: boolean; job: SyncJobPayload; onDelete: (jobId: string) => void }) {
   const events = job.execute.events.slice(-12).reverse()
   const summary = job.plan?.summary
 
@@ -66,7 +70,19 @@ function JobDetail({ job }: { job: SyncJobPayload }) {
           <h1>{job.request.operation} {job.request.entity_type}</h1>
           <code>{job.job_id}</code>
         </div>
-        <span className={`sync-job-status sync-job-status-large ${statusClass(job.status)}`}>{job.status}</span>
+        <div className="sync-detail-actions">
+          <span className={`sync-job-status sync-job-status-large ${statusClass(job.status)}`}>{job.status}</span>
+          {canDeleteJob(job.status) ? (
+            <button
+              type="button"
+              className="sync-delete-button"
+              disabled={deleting}
+              onClick={() => onDelete(job.job_id)}
+            >
+              {deleting ? 'Deleting…' : 'Delete job'}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="sync-detail-grid">
@@ -133,6 +149,7 @@ export function SyncJobsPage() {
   const [jobs, setJobs] = useState<SyncJobPayload[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -155,6 +172,19 @@ export function SyncJobsPage() {
   const selectedJob = useMemo(() => {
     return jobs.find((job) => job.job_id === selectedJobId) ?? jobs[0] ?? null
   }, [jobs, selectedJobId])
+
+  const handleDeleteJob = useCallback(async (jobId: string) => {
+    setDeletingJobId(jobId)
+    try {
+      await deleteSyncJob(jobId)
+      setJobs((current) => current.filter((job) => job.job_id !== jobId))
+      setError(null)
+    } catch (deleteError) {
+      setError((deleteError as Error).message || 'Failed to delete sync job.')
+    } finally {
+      setDeletingJobId(null)
+    }
+  }, [])
 
   if (loading) {
     return <section className="projects-empty-state">Loading sync jobs…</section>
@@ -179,7 +209,13 @@ export function SyncJobsPage() {
               <JobCard key={job.job_id} job={job} selected={job.job_id === selectedJob?.job_id} />
             ))}
           </aside>
-          {selectedJob ? <JobDetail job={selectedJob} /> : null}
+          {selectedJob ? (
+            <JobDetail
+              deleting={deletingJobId === selectedJob.job_id}
+              job={selectedJob}
+              onDelete={(jobId) => void handleDeleteJob(jobId)}
+            />
+          ) : null}
         </div>
       )}
     </section>

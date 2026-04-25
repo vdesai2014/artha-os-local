@@ -1968,6 +1968,12 @@ select {
   align-items: flex-start;
 }
 
+.sync-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .sync-detail-header h1 {
   margin: 8px 0;
   font-size: clamp(1.4rem, 3vw, 2rem);
@@ -1978,6 +1984,29 @@ select {
 .sync-job-status-large {
   margin-top: 4px;
   padding: 4px 9px;
+}
+
+.sync-delete-button {
+  border: 1px solid rgba(196, 80, 60, 0.35);
+  background: transparent;
+  color: #c4503c;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 4px 9px;
+  text-transform: uppercase;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.sync-delete-button:hover {
+  border-color: rgba(196, 80, 60, 0.7);
+  background: rgba(196, 80, 60, 0.08);
+}
+
+.sync-delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .sync-detail-grid {

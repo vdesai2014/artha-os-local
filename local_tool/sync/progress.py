@@ -4,11 +4,13 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from core.supervision import write_json_atomic
 
 from .models import SyncPlan, SyncRequest
+
+TERMINAL_SYNC_JOB_STATUSES = {"succeeded", "failed"}
 
 
 def _now() -> float:
@@ -70,6 +72,21 @@ def list_sync_jobs(home: Path, *, limit: int = 50) -> list[dict[str, Any]]:
         if len(jobs) >= limit:
             break
     return jobs
+
+
+def delete_sync_job(home: Path, job_id: str) -> Literal["deleted", "not_found", "not_terminal"]:
+    job_id = validate_sync_job_id(job_id)
+    payload = read_sync_job(home, job_id)
+    if payload is None:
+        return "not_found"
+    if payload.get("status") not in TERMINAL_SYNC_JOB_STATUSES:
+        return "not_terminal"
+    path = sync_jobs_dir(home) / f"{job_id}.json"
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return "not_found"
+    return "deleted"
 
 
 class SyncProgressReporter:
