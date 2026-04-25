@@ -70,6 +70,4 @@ ONLY after verifying the frontend loads in their browser.
 ## Next file
 
 Once the token is received, open `onboarding/05-clone-demo.md`. Do
-NOT open it before. Note: `05-clone-demo.md` does not yet exist in
-this checkout — if the file is missing, tell the user the next stage
-is not yet authored and stop. Do not improvise the next stage.
+NOT open it before.
