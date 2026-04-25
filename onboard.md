@@ -91,11 +91,15 @@ frontend loads.
 ## 3. Clone The Grasp-Pickup Demo
 
 Explain that the next step downloads the public demo project and checkpoints
-from artha.bot. It may take several minutes and `artha clone` currently
-has no progress stream.
+from artha.bot. It may take several minutes. `artha clone` prints a sync
+job id and periodic file/byte progress while `local_tool` does the work
+in the background.
 
 Use `artha clone`. Do not use `/api/sync/plan` for local IDs: plan is
 structural and clone output contains the authoritative execution remaps.
+Sync is additive: clone creates a fresh local copy, and push/pull never
+prune files. If obsolete cloud files need deletion later, use the cloud
+file-delete endpoints explicitly.
 
 ```bash
 artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/artha-grasp-clone.json

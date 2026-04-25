@@ -101,6 +101,24 @@ supervisor launches services pointed at nonexistent directories.
 Clone is not idempotent — rerunning creates a second local project.
 `rm -rf workspace/<name>__*` before retrying a failed clone.
 
+## Additive Semantics
+
+Sync is intentionally additive. `push`, `pull`, and `clone` create,
+patch, copy, or upload records/files that are in the resolved plan; they
+do not delete anything that is merely absent from the other side.
+
+This means:
+
+- Pushing a local project with fewer files than the cloud copy does not
+  prune remote files.
+- Pulling from cloud does not delete local-only files.
+- Cloning always creates a fresh local project with fresh IDs.
+- Removing obsolete cloud assets, such as spare checkpoints, requires an
+  explicit cloud file-delete API call.
+
+Agents should treat sync as a monotonic transfer primitive, not a
+bidirectional mirror.
+
 ## `associated_runs` ↔ cloud `source_run_id`
 
 Local `LocalManifest.associated_runs` is a list; the cloud's

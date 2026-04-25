@@ -94,7 +94,7 @@ Memory tier cheat sheet:
 | Tune a runtime constant | `config/params.json` (or NATS `param.set`) |
 | Add a teleop mode | `services/commander/main.py` + hardware-specific leader reader |
 | Add a new frontend page | `frontend/src/features/<name>/` + route in `frontend/src/app/router.tsx` |
-| Set eval provenance | NATS `provenance.override.set` (future: `artha provenance set`) |
+| Set eval provenance | `artha provenance set` |
 | Patch an episode reward | `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}` |
 | Clone a public project | `artha clone <project_id> --output /tmp/clone-result.json` |
 | Push/pull local state | `artha push project <id>` / `artha pull project <id>` |
@@ -113,6 +113,12 @@ Memory tier cheat sheet:
 - **Clone IDs are minted by execution.** `artha clone` returns the
   authoritative `id_remaps`. `/api/sync/plan` is structural and reports
   `required_id_remaps`, not concrete target IDs.
+- **Sync is additive.** `artha push`, `artha pull`, and `artha clone`
+  create/update/copy records and files, but they do not delete remote or
+  local files that are absent from the other side. To remove cloud files
+  such as obsolete checkpoints, call the explicit cloud file-delete
+  endpoints (`/api/projects/{id}/files/delete`,
+  `/api/runs/{id}/files/delete`).
 - **Clone is not idempotent.** Re-running creates a second copy.
   Cleanup: `rm -rf workspace/<name>__*` before retry.
 - **Cloud project names are unique per owner.** A fresh clone renamed
@@ -139,18 +145,16 @@ pause and ask.
 ## Common operational flows
 
 **Before a user kicks off an eval:**
-1. Confirm services are healthy (`artha status` when CLI exists; until
-   then, check `.artha/run/services/*.json` heartbeats or tail logs).
+1. Confirm services are healthy with `artha status`.
 2. Set provenance:
-   ```python
-   await nc.request("provenance.override.set", json.dumps({
-       "manifest_name": "eval-<policy>-<short-desc>",
-       "manifest_type": "eval",
-       "policy_name": "<policy>",
-       "source_run_id": "<run where checkpoint lives>",
-       "source_checkpoint": "<checkpoint filename>",
-       "updated_by": "agent",
-   }).encode())
+   ```bash
+   artha provenance set \
+     --manifest-name eval-<policy>-<short-desc> \
+     --manifest-type eval \
+     --policy-name <policy> \
+     --source-run-id <run where checkpoint lives> \
+     --source-checkpoint <checkpoint filename> \
+     --updated-by agent
    ```
 3. Confirm the manifest exists locally (create via `POST /api/manifests`
    if new).
@@ -162,8 +166,9 @@ pause and ask.
 
 **Cloning a public project:**
 1. Run `artha clone <project_id> --output /tmp/clone-result.json`.
-   Wait; sync currently has no progress stream, so mention the expected
-   delay before starting.
+   The CLI prints a sync job id and polls file/byte progress. If the user
+   hits Ctrl-C, the background `local_tool` job keeps running; inspect it
+   with `GET /api/sync/jobs/<job_id>`.
 2. Capture `id_remaps` from the output file.
 3. Rewrite `services.yaml` paths + `SOURCE_PROJECT_ID` / `SOURCE_RUN_ID`
    env vars.
@@ -186,6 +191,8 @@ pause and ask.
   we already have dataset manifests (`LocalManifest`).
 - Don't push from a clone expecting to merge back to the source —
   clone mints fresh IDs, so push creates a *new* cloud project.
+- Don't expect push/pull/clone to prune files. Sync is additive by
+  design; deletions require explicit delete APIs.
 - Don't expect `/api/sync/plan` to tell you clone target IDs. It only
   reports which IDs need remapping; `artha clone` output is authoritative.
 - Don't write camera frames from Python for real hardware. The Rust

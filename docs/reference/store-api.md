@@ -82,6 +82,10 @@ Body fields: `operation` (`push`/`pull`/`clone`), `entity_type`
 `include_descendants?`, `cloud_api_base?`, `bearer_token?`. Blocking
 `/api/sync/execute` also accepts `progress: true` to write a progress file.
 
+Sync is additive. These endpoints create/update/copy/upload planned
+records and files; they do not prune files missing from the source side.
+Use explicit delete endpoints for destructive cleanup.
+
 ## Proxies (not STORE API)
 
 | Path | Upstream |

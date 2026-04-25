@@ -15,7 +15,7 @@ There is deliberately **no per-endpoint CLI wrapper**. Two reasons: the API
 evolves independently of the OS, and the agent is already fluent in HTTP.
 The agent interacts with the cloud via one of:
 
-- **The sync tool** (`local_tool` push / pull / clone; CLI coming) — for
+- **The sync tool** (`artha push` / `artha pull` / `artha clone`) — for
   the 90% cases: moving an entity between local and cloud
 - **Raw HTTP in Python** from the CLI — for the long tail; creds live in
   `.artha/credentials.json`
@@ -69,6 +69,11 @@ manifest, many contributors.
   server-generated.
 - **Paths are canonicalized server-side.** `foo/./bar` and `foo/bar`
   collide; 400 on post-normalization duplicates.
+- **Sync is additive, not mirroring.** `push`, `pull`, and `clone` never
+  delete files just because they are absent from the other side. Use the
+  explicit file-delete endpoints (`/api/projects/{id}/files/delete`,
+  `/api/runs/{id}/files/delete`) to remove cloud assets such as obsolete
+  checkpoints.
 - **`source_run_id` on a manifest is singular.** Cloud does not model
   multi-source manifests. Keep local in step.
 - **PATCH is narrow.** Most resource fields are set at creation and
@@ -85,6 +90,8 @@ returns `required_id_remaps`, but does not mint concrete IDs. Agents should
 use `artha clone` and capture the returned `id_remaps` before rewriting
 `services.yaml` paths that reference old IDs. Only bypass the CLI for
 intentional API integrations that need the same lower-level boundary.
+Clone is always additive: rerunning creates another local copy rather than
+reconciling with an existing one.
 
 ## Full spec
 

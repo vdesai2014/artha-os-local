@@ -56,50 +56,27 @@ relative rates. No error, no warning.
 **Location:** `services/data_recorder/main.py` — the main loop's "Append if
 recording" block. See the `KNOWN ISSUE` note in the module docstring.
 
-### Clone mints IDs in both `/plan` and `/execute`, giving different remaps
+### Frontend sync UI still uses blocking push/pull calls
 
-**Context:** `_build_project_clone_plan` calls `generate_id("proj")` and
-`generate_id("run")` while building the plan. `POST /api/sync/plan` and
-`POST /api/sync/execute` each re-run `plan_sync` internally, so every call
-produces a fresh UUID set. An agent that plans, inspects `id_remaps`, then
-executes, gets *different* final IDs than the ones it previewed.
+**Context:** The backend now supports sync jobs:
+`POST /api/sync/jobs`, `GET /api/sync/jobs`, and
+`GET /api/sync/jobs/{id}`. The CLI uses this path and prints job/file/byte
+progress. The old `/api/sync/execute` path remains for direct/blocking
+clients.
 
-**Symptom:** dogfood run on 2026-04-21 — plan returned
-`proj_a8a097ef…`; execute returned `proj_882ddfae…`. Only /execute's
-remap is usable for downstream file rewrites.
+**Remaining symptom:** frontend project sync still calls the older blocking
+project sync route and shows a spinner without file-level status.
 
-**Fix direction (preferred):** move target-ID minting out of
-`_build_project_clone_plan` and into `_execute_clone_plan`. Clone's plan
-becomes a true preview (source scope + "N IDs will be remapped at exec"
-structure), and the execute result is the single authoritative source of
-`id_remaps`. No server-side plan caching, no round-tripping of large
-plan bodies. Push/pull are unaffected — their IDs are source IDs,
-stable across re-plans.
+**Fix direction:**
+- Route frontend push/pull/clone actions through `/api/sync/jobs`.
+- Add a small sync jobs panel that lists recent jobs from
+  `.artha/run/sync/<job_id>.json`.
+- Optional later: add cooperative cancellation via an explicit
+  `/api/sync/jobs/{id}/cancel` endpoint. Ctrl-C in the CLI currently stops
+  polling only; it does not stop the background job.
 
-**Location:** `local_tool/sync/plan.py::_build_project_clone_plan` and
-`local_tool/sync/exec.py::_execute_clone_plan`.
-
-### Sync operations (push/pull/clone) have no progress tracking
-
-**Context:** `/api/sync/execute` is a single long-lived HTTP request. A
-743 MB clone took 12m19s with zero intermediate feedback — clients,
-frontends, and agents all block with no visible progress. Same for big
-pushes.
-
-**Symptom:** frontend spinner turns infinitely; agents have no way to
-distinguish "still downloading" from "hung"; no way to cancel partway
-through.
-
-**Fix direction options:**
-- Server-sent events / chunked HTTP on `/api/sync/execute` streaming
-  per-file progress.
-- Split into `/api/sync/jobs` (POST starts job, returns `job_id`) +
-  `/api/sync/jobs/{id}` (GET polls status/progress) + optional
-  WebSocket stream for live updates.
-- CLI-side progress bar (tqdm or similar) that wraps the Python sync
-  entrypoints directly — skips HTTP altogether for local use.
-
-**Location:** `local_tool/sync/exec.py` + `local_tool/server/routes/sync.py`.
+**Location:** `frontend/src/features/projects/` +
+`local_tool/server/routes/sync.py`.
 
 ### macOS: `process_start_ticks` returns None — lose PID-reuse defense
 

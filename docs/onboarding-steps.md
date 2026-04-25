@@ -129,8 +129,8 @@ sleep 2
 curl -sS http://127.0.0.1:8000/api/health   # expect {"status":"ok",...}
 
 # Clone via the CLI (no auth required for public projects).
-# Expect ~10 minutes on a decent connection; there is currently no
-# progress feedback — the command blocks until done.
+# Expect several minutes on a decent connection. The CLI prints a sync
+# job id and polls file/byte progress until the background job finishes.
 artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/clone-result.json
 
 # Grab the id_remaps — THIS is the authoritative remap, not /sync/plan's.
@@ -140,7 +140,8 @@ python3 -c "import json; print(json.dumps(json.load(open('/tmp/clone-result.json
 **Known friction** (see `to-do.md`):
 - `/api/sync/plan` is structural for clone and reports only
   `required_id_remaps`; only `artha clone` output has concrete IDs.
-- Clone has no progress stream yet.
+- `push`, `pull`, and `clone` are additive. They do not delete/prune
+  files; use explicit cloud delete APIs for cleanup.
 - Clone is not idempotent — re-running creates a second copy. Clean
   up with `rm -rf workspace/grasp-pickup__*` before retrying.
 
