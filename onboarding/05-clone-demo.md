@@ -29,33 +29,22 @@ examples (do not paraphrase, do not just recite):
     schemas, fps, source provenance).
   - **Episodes** are individual recorded runs of the policy or human
     teleop.
-  - **Checkpoints** are the model weights produced by training runs.
-  Everything comes down with full lineage — no flattening.
 
-- **What `artha clone` outputs.** A JSON file at
-  `/tmp/artha-grasp-clone.json` containing `id_remaps` — a mapping
-  from cloud project/run/manifest/episode/checkpoint IDs to fresh
-  local IDs. This file is the **source of truth** for the rest of the
-  walkthrough. Stage 06 saves it; later stages read it to wire the
-  right run and checkpoint into `services.yaml`.
-
-- **Sync is additive.** Clone never prunes. If a cloud file is
-  removed, the local copy is unaffected unless the user explicitly
-  invokes a cloud file-delete endpoint. This is a deliberate safety
-  property — `clone`/`push`/`pull` are designed so accidents don't
-  cascade.
+- **Sync is additive — and not git.** Clone never prunes; if a cloud
+  file is removed, the local copy is unaffected unless the user
+  explicitly invokes a cloud file-delete endpoint. Even though
+  `clone`/`push`/`pull` sound like git, the model is different: code
+  is represented as files, not line-level diffs. Each experiment is
+  meant to be a fully self-contained unit — input datasets in, output
+  evals out — joined by structured provenance rather than commit
+  graphs.
 
 - **Time and bandwidth.** This stage is heavy: 10–15 minutes typical,
-  longer on a slow connection. Checkpoints are multi-gigabyte. The
-  command will print a sync-job id and periodic file/byte progress
-  while `local_tool` does the work in the background — surface that
-  progress to the user so they don't think it stalled.
-
-- **Why we'll bring the runtime down immediately after.** Once clone
-  finishes, Stage 06 will also run `artha down`. We need the
-  supervisor and bridge stopped before later stages edit
-  `services.yaml`, so the running services don't compete with the
-  edits.
+  longer on a slow connection. Checkpoints are ~350MB; episodes and
+  manifests add more on top. The command will print a sync-job id and
+  periodic file/byte progress while `local_tool` does the work in the
+  background — surface that progress to the user so they don't think
+  it stalled.
 
 ## Allowed commands
 
@@ -69,15 +58,15 @@ stage opens only after the user supplies the continue token.
 ## Success criteria
 
 - You have explained what `artha clone` pulls (code + runs +
-  manifests + episodes + checkpoints with full lineage), in your
-  own words.
+  manifests + episodes + checkpoints), in your own words.
 - You have walked through the artha.bot data model (projects → runs
-  → manifests/episodes/checkpoints) so the user knows what they're
-  about to see in `local_tool`.
-- You have set expectations on time (10–15 min, multi-gig checkpoints)
-  and on the JSON output file as session source-of-truth.
-- You have flagged the additive-sync safety property and the
-  immediate-after `artha down` so the user isn't surprised.
+  → manifests/episodes) so the user knows what they're about to see
+  in `local_tool`.
+- You have set expectations on time (10–15 min) and size (~350MB
+  checkpoints plus episodes and manifests).
+- You have flagged the additive-sync, not-git property, and what
+  that implies for how experiments are structured (self-contained
+  units joined by provenance, not commits).
 - The user is ready to proceed.
 
 ## Continue token
