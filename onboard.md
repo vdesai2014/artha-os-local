@@ -12,11 +12,20 @@ Start with `onboarding/00-orient.md`. Read ONLY that file first.
 2. **Vague confirmations DO NOT count as continue tokens.** "yes", "go",
    "yee", "sounds good", "looks good", and similar words do not advance
    the flow. The user must type the literal token string.
-3. **Each stage file has required narration.** You must explain the
+3. **Narration and execution live in separate stage files.** A given
+   stage file is EITHER a narration stage (zero executable commands;
+   you explain) OR an execution stage (commands you run; the WHY was
+   already narrated in the previous stage). If you find executable
+   commands in a stage that also asks you to narrate the WHY, that is
+   a bug in the file — flag it and stop. If you find yourself wanting
+   to run a command in a narration stage, STOP: you are in the wrong
+   stage. The execution stage opens only after a separate continue
+   token.
+4. **Each narration stage requires real narration.** Explain the
    stage's content to the user, in your own words, with concrete
    examples — not paraphrase, not bullet recital. The user is the
    audience; the file is your script, not your speech.
-4. **If interrupted or resuming**, identify the current stage from chat
+5. **If interrupted or resuming**, identify the current stage from chat
    history before continuing. Confirm with the user which stage you are
    in, what was last narrated, and what token is pending.
 
