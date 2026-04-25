@@ -37,6 +37,18 @@ const navItems: Array<{
       </svg>
     ),
   },
+  {
+    label: 'Sync',
+    path: '/sync',
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor">
+        <path d="M4 5h7.5" />
+        <path d="M9.5 3l2 2-2 2" />
+        <path d="M12 11H4.5" />
+        <path d="M6.5 9l-2 2 2 2" />
+      </svg>
+    ),
+  },
 ]
 
 interface SidebarProps {

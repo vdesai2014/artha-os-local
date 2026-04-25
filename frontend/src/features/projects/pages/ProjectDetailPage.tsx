@@ -4,12 +4,14 @@ import { Link, useParams } from 'react-router-dom'
 import { Button } from '../../../components/ui/Button'
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs'
 import { useAuth, useUser } from '../../auth/localAuth'
+import { startSyncJob } from '../../sync/api'
+import type { SyncJobStartResponse, SyncOperation } from '../../sync/types'
 import { FilesPanel } from '../components/FilesPanel'
 import { MarkdownReadmeEditor } from '../components/MarkdownReadmeEditor'
 import { RunsPanel } from '../components/RunsPanel'
-import { downloadProjectFiles, getProject, listProjectFiles, listRuns, syncProject } from '../api'
+import { downloadProjectFiles, getProject, listProjectFiles, listRuns } from '../api'
 import { saveProjectReadme } from '../readmeSync'
-import type { FileListEntry, ProjectDetail, ProjectSyncResult, RunSummary } from '../types'
+import type { FileListEntry, ProjectDetail, RunSummary } from '../types'
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-US', {
@@ -34,9 +36,9 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copiedProjectId, setCopiedProjectId] = useState(false)
-  const [syncing, setSyncing] = useState(false)
+  const [syncingOperation, setSyncingOperation] = useState<SyncOperation | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
-  const [syncResult, setSyncResult] = useState<ProjectSyncResult | null>(null)
+  const [syncJob, setSyncJob] = useState<(SyncJobStartResponse & { operation: SyncOperation }) | null>(null)
 
   const loadProjectPage = useCallback(async () => {
     if (!projectId) {
@@ -151,18 +153,22 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
     }
   }
 
-  async function handleSyncProject() {
-    if (!project || syncing) return
-    setSyncing(true)
+  async function handleStartSyncJob(operation: SyncOperation) {
+    if (!project || syncingOperation) return
+    setSyncingOperation(operation)
     setSyncError(null)
     try {
-      const result = await syncProject(project.id, getToken)
-      setSyncResult(result)
+      const result = await startSyncJob({
+        operation,
+        entity_type: 'project',
+        entity_id: project.id,
+      })
+      setSyncJob({ ...result, operation })
     } catch (syncProjectError) {
-      setSyncError((syncProjectError as Error).message || 'Failed to sync project.')
-      setSyncResult(null)
+      setSyncError((syncProjectError as Error).message || `Failed to start ${operation} job.`)
+      setSyncJob(null)
     } finally {
-      setSyncing(false)
+      setSyncingOperation(null)
     }
   }
 
@@ -225,18 +231,26 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
           </div>
 
           <div className="project-sync-row">
-            <Button type="button" variant="secondary" onClick={() => void handleSyncProject()} disabled={syncing}>
-              {syncing ? (
+            <Button type="button" variant="secondary" onClick={() => void handleStartSyncJob('push')} disabled={Boolean(syncingOperation)}>
+              {syncingOperation === 'push' ? (
                 <span className="button-spinner-wrap">
                   <span className="button-spinner" aria-hidden="true" />
-                  <span>Syncing Project…</span>
+                  <span>Submitting Push…</span>
                 </span>
-              ) : 'Sync Project'}
+              ) : 'Push'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => void handleStartSyncJob('pull')} disabled={Boolean(syncingOperation)}>
+              {syncingOperation === 'pull' ? (
+                <span className="button-spinner-wrap">
+                  <span className="button-spinner" aria-hidden="true" />
+                  <span>Submitting Pull…</span>
+                </span>
+              ) : 'Pull'}
             </Button>
             {syncError ? <div className="projects-status projects-status-error">{syncError}</div> : null}
-            {syncResult ? (
+            {syncJob ? (
               <div className="projects-status">
-                Synced to {syncResult.cloud_api_base}. Created {syncResult.created.runs} runs, {syncResult.created.manifests} manifests, {syncResult.created.episodes} episodes. Uploaded {syncResult.uploaded.project_files + syncResult.uploaded.run_files + syncResult.uploaded.episode_files} files.
+                {syncJob.operation} job submitted: <Link to={`/sync?job=${syncJob.job_id}`}>{syncJob.job_id}</Link>. Check the sync jobs page for status.
               </div>
             ) : null}
           </div>

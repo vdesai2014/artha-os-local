@@ -7,6 +7,7 @@ import { RunDetailPage } from '../features/projects/pages/RunDetailPage'
 import { DatasetsPage } from '../features/datasets/pages/DatasetsPage'
 import { DatasetDetailPage } from '../features/datasets/DatasetDetailPage'
 import { ControlsPage } from '../features/controls/pages/ControlsPage'
+import { SyncJobsPage } from '../features/sync/pages/SyncJobsPage'
 
 function LandingPage() {
   return (
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'datasets', element: <DatasetsPage /> },
       { path: 'datasets/:manifestId', element: <DatasetDetailPage /> },
       { path: 'controls', element: <ControlsPage /> },
+      { path: 'sync', element: <SyncJobsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
