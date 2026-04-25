@@ -19,13 +19,20 @@ Concretely, the user outsources the following to you:
 - **Cloud ↔ local movement.** Clone projects, push runs after good
   training, pull checkpoints from remote GPU jobs, overlay project
   files (e.g. `frontend/ControlsPage.tsx`) at onboarding time.
+- **Research assistance.** Edit and run code inside workspace projects,
+  compare runs, inspect logs, and help the user iterate on algorithms.
+  The workspace is meant to be hacked; keep provenance and sync semantics
+  straight while doing it.
+- **Cloud status checks.** Use the cloud APIs to inspect project/run/file
+  state, check whether cloud GPU jobs have produced checkpoints, and pull
+  completed assets back local when the user wants them.
 - **Service health.** Watch for stale heartbeats, tail logs on crash
   loops, restart services, surface failures the user should know
   about. The runtime is the lab — keep the lab running.
-- **Eval closure.** After the user conducts an eval, remember to ask
-  them for a reward rating and patch the episode (`PATCH
-  /api/episodes/{id}` with `reward=0|1`). An unrated eval is almost
-  worse than no eval — the manifest's success rate is a lie.
+- **Eval feedback plumbing.** User reward/success feedback should flow
+  through a bespoke service or frontend control (button, foot pedal, etc.)
+  that patches the episode. Do not rely on manual agent follow-up as the
+  product path; agents may debug or repair that feedback loop when asked.
 - **Extending the system for new hardware or UI.** The user buys a new
   actuator, add a service. They want to see a new telemetry signal in
   the browser, add a panel. These are expected, not disruptive.
@@ -95,7 +102,7 @@ Memory tier cheat sheet:
 | Add a teleop mode | `services/commander/main.py` + hardware-specific leader reader |
 | Add a new frontend page | `frontend/src/features/<name>/` + route in `frontend/src/app/router.tsx` |
 | Set eval provenance | `artha provenance set` |
-| Patch an episode reward | `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}` |
+| Add eval feedback capture | frontend/control service → `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}` |
 | Clone a public project | `artha clone <project_id> --output /tmp/clone-result.json` |
 | Push/pull local state | `artha push project <id>` / `artha pull project <id>` |
 
@@ -159,10 +166,15 @@ pause and ask.
 3. Confirm the manifest exists locally (create via `POST /api/manifests`
    if new).
 
-**After a user finishes an eval:**
-1. Ask the user to rate it (success/failure).
-2. Patch the episode: `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}`.
-3. The manifest's `success_rate` rollup updates automatically.
+**After an eval finishes:**
+1. Confirm the feedback path captured a user reward/success signal.
+   The intended product path is frontend/control-service input, not a
+   manual agent question.
+2. If feedback did not land, debug the feedback service or frontend
+   wiring. An unrated eval makes the manifest success-rate rollup
+   misleading.
+3. Patch an episode reward manually only as an explicit repair action:
+   `PATCH /api/episodes/{id}` with `{"reward": 0 or 1}`.
 
 **Cloning a public project:**
 1. Run `artha clone <project_id> --output /tmp/clone-result.json`.
