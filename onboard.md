@@ -26,64 +26,79 @@ coding-agent capability lets you do — the agent handles the bespoke
 plumbing while the user keeps full visibility into what's running and
 why.
 
-## 0. Why artha-os, And The Tour
+## 0. Explain & Offer
 
-Tell the user the WHY before describing the tour or running anything.
-They may not know robot learning — make the problems concrete.
-
-**The why.** Robot learning is unusual among ML workflows: half of it is
-OS-level data plumbing, the other half is model training. artha-os
-exists because four pain points keep biting:
-
-- **High-rate, typed data movement that's fast to iterate on.** A robot
-  (real or sim) produces dozens of streams — camera frames, joint state,
-  torque, contact signals — at tens to hundreds of Hz, with controllers
-  publishing back at 100Hz+. artha-os picks low-level primitives (typed
-  shared memory plus a small supervisor) so adding a sensor, swapping a
-  model, or wiring in a new controller is a struct definition plus a
-  `services.yaml` entry — not a rewrite of the transport or a runtime
-  redesign.
-- **Experiment lineage.** Robot learning is a ladder of experiments —
-  collect data, train policy A, evaluate, change architecture, retrain,
-  evaluate again, layer RL on top. After a few weeks you have twenty
-  checkpoints, and "which dataset trained which model produced this
-  eval result?" has no good answer unless every link — code, data,
-  training run, eval episode — is recorded with structured provenance.
-- **Cloud round-trips.** Robots and sims produce more data than fits on
-  a laptop, and training the bigger models needs GPUs the robot machine
-  doesn't have. You push data and code to the cloud, train on a GPU
-  machine there, pull checkpoints back to local for eval. That
-  round-trip happens dozens of times per project; it has to be cheap,
-  additive (never delete by accident), and traceable.
-- **Plumbing dominates.** Most robot-learning work in practice is
-  gluing services together, debugging socket reconnects, normalizing
-  dataset formats, and re-deriving which checkpoint trained on which
-  data. Researchers want their time on the science.
-
-artha-os addresses these directly: typed shared-memory data plane for
-high-rate streams, NATS for control-plane events, a local file-based
-store with first-class provenance, `push`/`pull`/`clone` for cloud
-round-trips, and a runtime small and inspectable enough that a coding
-agent can do the plumbing while the user focuses on the experiment.
-
-**The tour.** Then describe what's about to happen:
-
-- artha-os is an agent-first robot learning platform for local robots,
-  datasets, runs, checkpoints, and cloud sharing.
-- This walkthrough is the **grasp-pickup demo** — one application of the
-  tool. The same primitives generalize to other simulated robots and to
-  real robot hardware.
-- The base install brings up NATS, local_tool, the supervisor, and the
-  frontend.
-- The guided demo clones a MuJoCo grasp-pickup project from artha.bot,
-  wires its sim/inference/frontend into the local runtime, and lets the
-  user run an in-browser eval.
-- Expect roughly 10-15 minutes for setup on a fresh machine, longer if
-  Python, Node, Rust, or large checkpoint downloads are cold.
-
-Ask for permission before continuing.
+> **AGENT STOP. EXPLAIN THIS IN YOUR OWN WORDS, IN CHAT.**
+>
+> The user has just cloned artha-os. They may not know robot learning.
+> Before running ANY command, walk them through:
+>
+> - **What artha-os is.** An agent-first robot learning platform —
+>   local NATS + supervisor + frontend + file-based store, with cloud
+>   sync to artha.bot for code, datasets, and checkpoints. The runtime
+>   is intentionally small, file-based, and inspectable so the agent
+>   (you) can do the plumbing while the user focuses on the experiment.
+>
+> - **Why it exists.** Robot learning is half OS-level data plumbing
+>   and half model training. Four pain points keep biting — explain
+>   each, in your own words, with concrete examples:
+>     1. **High-rate, typed data movement that's fast to iterate on.**
+>        Robots push dozens of streams (cameras, joints, torque,
+>        contact) at tens-to-hundreds of Hz; controllers publish back
+>        at 100Hz+. artha-os uses typed shared memory + a small
+>        supervisor so adding a sensor, swapping a model, or wiring a
+>        new controller is a struct definition plus a `services.yaml`
+>        entry — not a transport rewrite.
+>     2. **Experiment lineage.** Robot learning is a ladder of
+>        experiments. After weeks of iteration, "which dataset trained
+>        which model produced this eval?" only has an answer if every
+>        link — code, data, run, episode — is recorded with structured
+>        provenance.
+>     3. **Cloud round-trips.** Robots produce more data than fits on
+>        a laptop; bigger models need cloud GPUs. `push`/`pull`/`clone`
+>        move code, datasets, and checkpoints between local and
+>        artha.bot, additively and traceably.
+>     4. **Plumbing dominates.** Most robot-learning time goes to
+>        gluing services, debugging socket reconnects, and re-deriving
+>        which checkpoint trained on which data. Researchers want time
+>        on the science.
+>
+> - **What's on offer.** Tell the user there's a canonical MuJoCo
+>   grasp-pickup demo on artha.bot, pulled fresh and run end-to-end in
+>   the browser — the fastest way to see all four pain points solved
+>   together. The arc:
+>     - Install Python + Node + NATS + Rust deps (~10–15 min fresh).
+>     - Boot the base runtime; confirm frontend loads.
+>     - Clone the grasp-pickup project from artha.bot (~3 min).
+>     - Wire its sim, inference, recorder, and UI into the runtime.
+>     - Click eval/start; watch the arm grasp a block.
+>
+> - **Where to drop it.** Ask the user where they want artha-os
+>   installed. Default: the current checkout dir. Confirm — pip
+>   editable install, node_modules, cargo target, and the demo
+>   workspace all land here.
+>
+> **AGENT DO NOT PROCEED PAST THIS SECTION** until:
+> 1. You have explained artha-os + the four pain points in your own
+>    words, with concrete examples (not just paraphrase).
+> 2. The user has confirmed they want to run the demo.
+> 3. The user has confirmed the install location.
 
 ## 1. Install Dependencies
+
+> **AGENT STOP. NARRATE BEFORE RUNNING. NON-NEGOTIABLE.**
+>
+> Do NOT execute any command in this section until you have told the
+> user, IN CHAT, IN YOUR OWN WORDS:
+>
+> - This is the install phase: Python + ML libs, frontend (npm), NATS
+>   server, and the Rust video_bridge. Expect ~10–15 minutes on a fresh
+>   machine.
+> - Why each piece exists: NATS = control-plane events; Python = runtime
+>   + inference; frontend = browser UI; video_bridge = camera streams.
+> - Ask permission before installing Rust via rustup if cargo is missing.
+>
+> Running commands without narrating first is a failed section.
 
 Run from the repo root.
 
@@ -128,6 +143,20 @@ If any dependency fails, read `docs/onboarding-steps.md` for fallback notes
 and tell the user exactly what failed.
 
 ## 2. Prove The Base Runtime
+
+> **AGENT STOP. NARRATE BEFORE RUNNING. NON-NEGOTIABLE.**
+>
+> Do NOT execute any command in this section until you have told the
+> user:
+>
+> - This is the first runtime boot — NATS, local_tool, supervisor, and
+>   the frontend coming up together.
+> - Why: it proves the install worked end-to-end before anything
+>   project-specific is added.
+> - They will be asked to open `http://127.0.0.1:8000` and confirm the
+>   frontend loads.
+>
+> Running commands without narrating first is a failed section.
 
 Start the stock runtime and show that the agent can operate it.
 
@@ -185,6 +214,20 @@ Want me to continue into the grasp-pickup demo so you can see this loop end to e
 ```
 
 ## 3. Clone The Grasp-Pickup Demo
+
+> **AGENT STOP. NARRATE BEFORE RUNNING. NON-NEGOTIABLE.**
+>
+> Do NOT run `artha clone` until you have told the user:
+>
+> - This is the cloud → local hop. `artha clone` pulls the full
+>   grasp-pickup project from artha.bot — code, runs, manifests,
+>   episodes, checkpoints — into the local store with fresh local IDs.
+> - Why: the demo is a real research project, not a fixture. The
+>   checkpoint about to be loaded is the endpoint of this lineage.
+> - Expect several minutes; the command prints sync-job progress while
+>   `local_tool` does the work in the background.
+>
+> Running the clone without narrating first is a failed section.
 
 **Narrate:** This is the cloud → local hop that makes the demo possible.
 `artha clone` pulls the entire grasp-pickup project from artha.bot — code,
@@ -296,6 +339,22 @@ code, data, and provenance, so the user can inspect or branch from any
 of them. Section 11 has the full table for the recap.
 
 ## 5. Wire Demo Services
+
+> **AGENT STOP. NARRATE BEFORE RUNNING. NON-NEGOTIABLE.**
+>
+> Do NOT execute the heredoc in this section until you have told the
+> user:
+>
+> - This is the biggest single edit: replace `services.yaml` with the
+>   demo runtime — sim, data_recorder, video_bridge, eval_runner,
+>   commander, and act_ppo_inference. Each service declares its IPC
+>   publishes/subscribes.
+> - Why: the supervisor reads `services.yaml` to know the full topology
+>   — every service, every typed topic, every dataflow edge. The
+>   dataflow diagram below the heredoc walks through what got wired.
+> - The original `services.yaml` is preserved as `services.yaml.pre-demo`.
+>
+> Running the heredoc without narrating first is a failed section.
 
 **Narrate:** This replaces `services.yaml` with the demo runtime — sim,
 data_recorder, video_bridge, bridge, eval_runner, provenance, commander,
@@ -568,6 +627,20 @@ cd frontend && npm run build && cd -
 
 ## 8. Boot The Demo Runtime
 
+> **AGENT STOP. NARRATE BEFORE RUNNING. NON-NEGOTIABLE.**
+>
+> Do NOT run `artha up --force` until you have told the user:
+>
+> - This is the moment the full demo runtime comes up. Everything wired
+>   in §4–§7 boots together — sim publishing state and cameras at 50Hz,
+>   `act_ppo_inference` loading the checkpoint and predicting,
+>   `video_bridge` streaming UI cameras to the browser.
+> - Why: this is what the install + clone + wiring were building toward.
+> - If anything fails to start, you (the agent) triage via `artha logs`
+>   before asking the user.
+>
+> Running commands without narrating first is a failed section.
+
 **Narrate:** The supervisor brings up everything declared in
 `services.yaml` in dependency order. After this, sim is publishing state
 and camera frames at 50Hz, `act_ppo_inference` is loading the checkpoint
@@ -633,6 +706,22 @@ artha provenance get
 ```
 
 ## 10. Hand The User To The Browser
+
+> **AGENT STOP. THIS SECTION IS NARRATION-ONLY. NON-NEGOTIABLE.**
+>
+> You CANNOT just point the user at a URL and end the onboarding. You
+> MUST walk them through, IN CHAT:
+>
+> - Where to click: **Controls** page → **eval/start** button.
+> - What's happening between click and grasp: NATS event flips
+>   `eval_runner` into running mode → `act_ppo_inference` predicts
+>   chunks at 50Hz → `commander` relays at 100Hz → sim executes →
+>   recorder writes the episode at 30Hz.
+> - What they see next: flip to the **Datasets** page, watch the new
+>   episode appear under `eval-act-ppo-grasp-pickup`.
+>
+> Handing off without narrating any of the above is a failed climax for
+> the entire onboarding.
 
 **Narrate:** This is the moment the runtime works end-to-end. Walk the
 user through it instead of dropping a URL — they don't yet know where
