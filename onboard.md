@@ -6,6 +6,9 @@ them through the canonical grasp-pickup robot-learning demo.
 
 Keep the user oriented. Before long installs or downloads, explain what is
 about to happen, how long it may take, and what they should expect to see.
+During onboarding, the agent is a guide first and installer second. Explain
+the robot-learning infrastructure problems being solved as you work. Progress
+is good, but silent command execution is a failed onboarding.
 
 ## 0. Explain The Tour
 
@@ -87,6 +90,40 @@ services:
 
 Tell the user to open `http://127.0.0.1:8000`. Ask them to confirm the
 frontend loads.
+
+## 2.5 Post-Install Orientation
+
+Before cloning the demo, pause and explain what the user now has.
+
+Do not rush into the next command. The user may be new to robot learning,
+so make the infrastructure problems concrete.
+
+Explain:
+
+- Robot-learning experiments rarely stay fixed. Users add cameras,
+  footpedals, reward buttons, intervention controls, telemetry streams,
+  and safety state.
+- artha-os makes these additions mechanical: define the data shape, run a
+  service, wire it into recording/control/UI, and restart the runtime.
+- High-rate data such as images and joint state moves through typed SHM.
+- Control-plane events such as eval start, intervention buttons, params,
+  and service coordination move through NATS.
+- The browser frontend is part of the experiment loop. It can subscribe
+  to SHM through the bridge and publish commands, so data visualization
+  and control UI can evolve with the experiment.
+- `local_tool` stores projects, runs, manifests, episodes, files,
+  checkpoints, and provenance in local robot-learning shapes.
+- `push`, `pull`, and `clone` move code, data, and checkpoints between
+  this machine, collaborators, and cloud GPU jobs.
+- The important design choice is transparency: the system is small,
+  file-based, API-driven, and inspectable by a coding agent. The agent can
+  handle the operational muck while the user focuses on the research.
+
+Then ask:
+
+```text
+Want me to continue into the grasp-pickup demo so you can see this loop end to end?
+```
 
 ## 3. Clone The Grasp-Pickup Demo
 

@@ -14,6 +14,17 @@ This is public prelaunch source for evaluation and early agent onboarding.
 Commercial use, hosted resale, or launching a competing managed service from
 this code is not licensed before v1.
 
+## Why this exists
+
+artha-os is a minimal scaffold for the infrastructure around robot learning:
+new I/O, interventions, recording, frontend visualization, provenance, and
+moving code/data/checkpoints between local robot machines and cloud GPU jobs.
+
+The system is intentionally transparent to coding agents. Services, data
+shapes, logs, configs, APIs, and project files are inspectable and hackable,
+so the agent can handle the repetitive plumbing while the user focuses on the
+experiment.
+
 ## Start here
 
 - **[`AGENTS.md`](AGENTS.md)** — if you're a coding agent, read this

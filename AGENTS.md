@@ -45,6 +45,12 @@ decisions are reversible local changes; act and report.
 
 - **Default to action on reversible things.** Create the manifest,
   rename the file, restart the service. Report briefly.
+- **First-run onboarding is guided.** Do not silently execute the
+  install/demo sequence. After the base runtime is running, pause and
+  teach the scaffold: services, SHM, NATS, frontend bridge, `local_tool`,
+  provenance, and cloud sync. Tie each piece to a robot-learning pain:
+  new sensors/interventions, data recording, UI iteration, and cloud GPU
+  experiments.
 - **Ask before destructive or cross-user operations.** Pushing a new
   public project, deleting an existing manifest, overwriting a
   trained checkpoint. Confirm these.
