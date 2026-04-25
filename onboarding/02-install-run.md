@@ -20,9 +20,26 @@ immediately, in chat, before continuing to the next command.
 Run, in order:
 
 ```bash
-# Python + ML
+# Python + ML — try `--user` first; fall back to a project-local venv
+# only if the install fails specifically with the message
+# `error: externally-managed-environment` (PEP 668 — Ubuntu 23.04+,
+# recent Debian, recent Homebrew Python, some sandboxed shells). Do
+# NOT switch to venv for unrelated failures (network errors, dep
+# conflicts, etc.) — surface those to the user instead.
+
+# Path A — standard --user install:
 python3 -m pip install --user -e .
 python3 -m pip install --user mujoco torch torchvision einops
+
+# Path B — fallback to .venv/ if Path A errored with
+# externally-managed-environment. After taking this path, tell the
+# user that future shells will need `source .venv/bin/activate` to
+# find the `artha` CLI on PATH.
+#
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   python3 -m pip install -e .
+#   python3 -m pip install mujoco torch torchvision einops
 
 # Frontend
 cd frontend && npm install && npm run build && cd -
@@ -53,15 +70,18 @@ starts services or contacts artha.bot. Those belong to later stages.
 
 ## Success criteria
 
-- `which artha` returns a path.
+- `which artha` returns a path. (If you took the venv path, run this
+  in a shell where `.venv/` is activated — chain after
+  `source .venv/bin/activate`.)
 - `frontend/dist/index.html` exists.
 - `nats-server --version` prints a 2.x version.
 - `services/video_bridge/target/release/video-bridge` exists.
 
 If any of these fail, surface the failure to the user in chat and
 diagnose before requesting the continue token. Common real-world
-failures: torch CUDA mismatch, mujoco EGL/GL setup, ports 4222/8000
-already in use from another stack.
+failures: PEP 668 externally-managed errors (use Path B above), torch
+CUDA mismatch, mujoco EGL/GL setup, ports 4222/8000 already in use
+from another stack.
 
 ## Continue token
 

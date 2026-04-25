@@ -44,7 +44,8 @@ Explain the following in your own words, in chat, with concrete examples
   fastest way to see all four pain points solved together. The arc:
   - Install Python + Node + NATS + Rust deps (~10–15 min fresh).
   - Boot the base runtime; confirm frontend loads.
-  - Clone the grasp-pickup project from artha.bot (~3 min).
+  - Clone the grasp-pickup project from artha.bot (~10–15 min;
+    multi-gigabyte checkpoint downloads).
   - Wire its sim, inference, recorder, and UI into the runtime.
   - Click eval/start; watch the arm grasp a block.
 
