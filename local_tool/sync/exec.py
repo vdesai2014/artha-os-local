@@ -252,6 +252,12 @@ def _sync_manifest_episodes(
                 "length": episode.length,
                 "task": episode.task or manifest.type,
                 "task_description": episode.task_description,
+                "collection_mode": episode.collection_mode,
+                "source_project_id": episode.source_project_id,
+                "source_run_id": episode.source_run_id,
+                "source_checkpoint": episode.source_checkpoint,
+                "policy_name": episode.policy_name,
+                "reward": episode.reward,
                 "features": episode.features,
                 "files": {
                     path: {
@@ -575,6 +581,8 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, r
                 features=action.payload.get("features"),
                 associated_runs=action.payload.get("associated_runs"),
                 episode_ids=action.payload.get("episode_ids"),
+                success_rate=action.payload.get("success_rate"),
+                rated_episodes=action.payload.get("rated_episodes", 0),
                 manifest_id=action.entity_id,
                 created_at=action.payload.get("created_at"),
                 updated_at=action.payload.get("updated_at"),
@@ -593,6 +601,8 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, r
                 "encoding": action.payload.get("encoding"),
                 "features": action.payload.get("features"),
                 "associated_runs": action.payload.get("associated_runs"),
+                "success_rate": action.payload.get("success_rate"),
+                "rated_episodes": action.payload.get("rated_episodes"),
                 "updated_at": action.payload.get("updated_at"),
             }
             manifests.update_manifest(ctx, action.entity_id, **manifest_updates)
@@ -609,7 +619,12 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, r
                 task=action.payload.get("task"),
                 task_description=action.payload.get("task_description"),
                 features=action.payload.get("features"),
+                collection_mode=action.payload.get("collection_mode"),
+                source_project_id=action.payload.get("source_project_id"),
                 source_run_id=action.payload.get("source_run_id"),
+                source_checkpoint=action.payload.get("source_checkpoint"),
+                policy_name=action.payload.get("policy_name"),
+                reward=action.payload.get("reward"),
                 files=action.payload.get("files"),
                 size_bytes=action.payload.get("size_bytes"),
                 episode_id=action.entity_id,
@@ -626,7 +641,12 @@ def _execute_pull_plan(ctx: StoreCtx, plan: SyncPlan, config: CloudSyncConfig, r
                 "features": action.payload.get("features"),
                 "files": action.payload.get("files"),
                 "size_bytes": action.payload.get("size_bytes"),
+                "collection_mode": action.payload.get("collection_mode"),
+                "source_project_id": action.payload.get("source_project_id"),
                 "source_run_id": action.payload.get("source_run_id"),
+                "source_checkpoint": action.payload.get("source_checkpoint"),
+                "policy_name": action.payload.get("policy_name"),
+                "reward": action.payload.get("reward"),
             }
             episodes.update_episode(ctx, action.entity_id, **episode_updates)
             reporter.event("metadata", "done", "update local episode", operation="update_local", entity_type="episode", entity_id=action.entity_id)

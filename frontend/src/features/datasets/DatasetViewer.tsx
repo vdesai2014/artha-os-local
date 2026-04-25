@@ -349,6 +349,9 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
             ),
           },
         })))
+        setSelectedEpisode((episode) => (
+          episode?.id === episodeId ? { ...episode, reward: updated.reward } : episode
+        ))
         // Refetch manifest to pick up recomputed success_rate + rated_episodes.
         // Fire-and-forget; the rollup is best-effort display.
         void fetchDatasetManifest(manifestId).then(setManifest).catch(() => {})

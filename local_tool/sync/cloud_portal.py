@@ -100,10 +100,6 @@ class CloudPortal:
         self._request_json("PATCH", f"/api/runs/{run.id}", json=payload)
 
     def ensure_manifest(self, manifest) -> bool:
-        # Boundary shim: cloud manifest has a singular `source_run_id`; local
-        # has a list `associated_runs`. We send the first associated run on
-        # push and drop the rest. See to-do.md ("Manifest source_run_id ↔
-        # associated_runs drift") — owed a coordinated decision.
         source_run_id = manifest.associated_runs[0].run_id if manifest.associated_runs else None
         return self._request_allow_conflict(
             "POST",
@@ -115,14 +111,18 @@ class CloudPortal:
                 "type": manifest.type,
                 "tags": manifest.tags,
                 "is_public": manifest.is_public,
-                "fps": manifest.fps or 30,
+                "fps": manifest.fps,
                 "encoding": manifest.encoding,
                 "features": manifest.features,
                 "source_run_id": source_run_id,
+                "associated_runs": [run.model_dump() for run in manifest.associated_runs],
+                "success_rate": manifest.success_rate,
+                "rated_episodes": manifest.rated_episodes,
             },
         )
 
     def patch_manifest(self, manifest) -> None:
+        source_run_id = manifest.associated_runs[0].run_id if manifest.associated_runs else None
         self._request_json(
             "PATCH",
             f"/api/manifests/{manifest.id}",
@@ -131,6 +131,13 @@ class CloudPortal:
                 "description": manifest.description,
                 "tags": manifest.tags,
                 "is_public": manifest.is_public,
+                "fps": manifest.fps,
+                "encoding": manifest.encoding,
+                "features": manifest.features,
+                "source_run_id": source_run_id,
+                "associated_runs": [run.model_dump() for run in manifest.associated_runs],
+                "success_rate": manifest.success_rate,
+                "rated_episodes": manifest.rated_episodes,
             },
         )
 

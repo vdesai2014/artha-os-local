@@ -715,12 +715,8 @@ def _collect_cloud_link_scope(
 
 
 def _cloud_manifest_from_payload(payload: dict, episode_ids: list[str]) -> LocalManifest:
-    # Boundary shim: cloud manifest has a singular `source_run_id`; local
-    # has a list `associated_runs`. Wrap the singleton into a one-entry
-    # list so local semantics work uniformly. See to-do.md ("Manifest
-    # source_run_id ↔ associated_runs drift") — owed a coordinated decision.
     source_run_id = payload.get("source_run_id")
-    associated_runs = (
+    associated_runs = payload.get("associated_runs") or (
         [{"project_id": None, "run_id": source_run_id}] if source_run_id else []
     )
     return LocalManifest.model_validate(
@@ -736,6 +732,8 @@ def _cloud_manifest_from_payload(payload: dict, episode_ids: list[str]) -> Local
             "features": payload.get("features", {}),
             "associated_runs": associated_runs,
             "episode_ids": episode_ids,
+            "success_rate": payload.get("success_rate"),
+            "rated_episodes": payload.get("rated_episodes", 0),
             "created_at": payload.get("created_at"),
             "updated_at": payload.get("updated_at"),
         }
@@ -760,7 +758,12 @@ def _cloud_episode_from_payload(payload: dict, manifest_id: str) -> LocalEpisode
         },
         "size_bytes": sum(int(meta.get("size", 0)) for meta in files.values()),
         "manifest_ids": [manifest_id],
-        "source_run_id": None,
+        "collection_mode": payload.get("collection_mode"),
+        "source_project_id": payload.get("source_project_id"),
+        "source_run_id": payload.get("source_run_id"),
+        "source_checkpoint": payload.get("source_checkpoint"),
+        "policy_name": payload.get("policy_name"),
+        "reward": payload.get("reward"),
     }
     if payload.get("created_at") is not None:
         episode_payload["created_at"] = payload["created_at"]
@@ -790,6 +793,8 @@ def _append_pull_linked_manifest_actions(ctx: StoreCtx, plan: SyncPlan) -> None:
                     "features": dict(manifest.features),
                     "associated_runs": [run.model_dump() for run in manifest.associated_runs],
                     "episode_ids": list(manifest.episode_ids),
+                    "success_rate": manifest.success_rate,
+                    "rated_episodes": manifest.rated_episodes,
                     "created_at": manifest.created_at.isoformat(),
                     "updated_at": manifest.updated_at.isoformat(),
                 },
@@ -819,7 +824,12 @@ def _append_pull_linked_manifest_actions(ctx: StoreCtx, plan: SyncPlan) -> None:
                     "files": dict(episode.files),
                     "size_bytes": episode.size_bytes,
                     "manifest_ids": list(episode.manifest_ids),
+                    "collection_mode": episode.collection_mode,
+                    "source_project_id": episode.source_project_id,
                     "source_run_id": episode.source_run_id,
+                    "source_checkpoint": episode.source_checkpoint,
+                    "policy_name": episode.policy_name,
+                    "reward": episode.reward,
                     "created_at": episode.created_at.isoformat(),
                 },
             )

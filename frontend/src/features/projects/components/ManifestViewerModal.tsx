@@ -1,9 +1,15 @@
 import { Modal } from '../../../components/ui/Modal'
+import { DatasetViewer } from '../../datasets/DatasetViewer'
 
 export function ManifestViewerModal({ manifestId, onClose }: { manifestId: string; onClose: () => void }) {
   return (
-    <Modal title="Dataset Viewer" onClose={onClose}>
-      <p className="project-detail-empty">Manifest viewer for `{manifestId}` will be enabled once local manifest/video/parquet APIs are in place.</p>
+    <Modal
+      title="Dataset Viewer"
+      onClose={onClose}
+      panelClassName="modal-panel-wide"
+      bodyClassName="modal-body-dataset"
+    >
+      <DatasetViewer manifestId={manifestId} compact />
     </Modal>
   )
 }
