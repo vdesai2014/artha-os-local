@@ -16,6 +16,10 @@ Tell the user:
 
 - artha-os is an agent-first robot learning platform for local robots,
   datasets, runs, checkpoints, and cloud sharing.
+- This walkthrough is the **grasp-pickup demo** — one application of the
+  tool. The same primitives (typed SHM data plane, NATS control plane,
+  local file-based store, agent-driven service wiring) generalize to other
+  simulated robots and to real robot hardware.
 - The base install brings up NATS, local_tool, the supervisor, and the
   frontend.
 - The guided demo clones a MuJoCo grasp-pickup project from artha.bot,
@@ -54,15 +58,17 @@ fi
 nats-server --version
 ```
 
-Build the video bridge if Rust/Cargo is available. If Cargo is missing, ask
-the user before installing Rust.
+The video bridge is required — `video_bridge` is referenced
+unconditionally in the demo `services.yaml` and serves the UI camera
+streams. If Cargo is missing, ask the user for permission to install Rust
+via rustup, then build.
 
 ```bash
-if command -v cargo >/dev/null; then
-  cd services/video_bridge && cargo build --release && cd -
-else
-  echo "cargo missing; video_bridge build skipped"
+if ! command -v cargo >/dev/null; then
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+  source "$HOME/.cargo/env"
 fi
+cd services/video_bridge && cargo build --release && cd -
 ```
 
 If any dependency fails, read `docs/onboarding-steps.md` for fallback notes
@@ -127,24 +133,26 @@ Want me to continue into the grasp-pickup demo so you can see this loop end to e
 
 ## 3. Clone The Grasp-Pickup Demo
 
-Explain that the next step downloads the public demo project and checkpoints
-from artha.bot. It may take several minutes. `artha clone` prints a sync
-job id and periodic file/byte progress while `local_tool` does the work
-in the background.
+**Narrate:** This is the cloud → local hop that makes the demo possible.
+`artha clone` pulls the entire grasp-pickup project from artha.bot — code,
+runs, manifests, episodes, and checkpoints — into the local store, with
+fresh local IDs. Expect several minutes; the command prints a sync job
+id and periodic file/byte progress while `local_tool` does the work in
+the background.
 
-Use `artha clone`. Do not use `/api/sync/plan` for local IDs: plan is
-structural and clone output contains the authoritative execution remaps.
-Sync is additive: clone creates a fresh local copy, and push/pull never
-prune files. If obsolete cloud files need deletion later, use the cloud
-file-delete endpoints explicitly.
+Agent guardrails: use `artha clone`, not `/api/sync/plan` — plan is
+structural and only `clone` output contains the authoritative execution
+remaps. Sync is additive: clone never prunes files. If obsolete cloud
+files need deletion later, use the cloud file-delete endpoints explicitly.
+
+**Execute:**
 
 ```bash
 artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/artha-grasp-clone.json
 ```
 
-Save the output mentally and on disk. The file
-`/tmp/artha-grasp-clone.json` is the source of truth for the rest of this
-session.
+The file `/tmp/artha-grasp-clone.json` is the source of truth for the rest
+of this session.
 
 Now stop the stack before editing service definitions:
 
@@ -154,7 +162,14 @@ artha down
 
 ## 4. Add Demo SHM Types
 
-The demo needs robot state, robot command, and camera frame structs.
+**Narrate:** The artha-os data plane uses iceoryx2 shared memory with
+typed ctypes structs — same memory layout in every service that touches
+a topic, sub-millisecond latency. The demo needs three: a 7-DOF robot
+state, a 7-DOF robot command, and a 921600-byte camera frame (sized for
+up to 640×480×3 RGB). Adding a typed topic to artha-os is exactly this:
+drop a struct in `core/types.py` and restart.
+
+**Execute:**
 
 ```bash
 python3 - <<'PY'
@@ -216,9 +231,26 @@ If you changed struct sizes after a previous run, clear old SHM segments:
 rm -rf /tmp/iceoryx2
 ```
 
+## 4.5 Orient On The Run Progression
+
+Before wiring the demo runtime, briefly explain what was cloned. The
+project is a research ladder — CNN+MLP behavior cloning, then chunked
+CNN+MLP, then ACT-style transformer over chunks, then residual PPO on top
+of ACT — with eval success roughly 0% → 31% → 68% → ~100%. The checkpoint
+about to be loaded (`rl_best_eval.ckpt` from `act-ppo-dense-affine`) is
+the top rung. Every rung is a first-class run in artha-os with its own
+code, data, and provenance, so the user can inspect or branch from any
+of them. Section 11 has the full table for the recap.
+
 ## 5. Wire Demo Services
 
-This replaces `services.yaml` with the demo runtime and keeps a backup.
+**Narrate:** This replaces `services.yaml` with the demo runtime — sim,
+data_recorder, video_bridge, bridge, eval_runner, provenance, commander,
+and act_ppo_inference — each declared with its IPC publishes/subscribes
+so the supervisor knows the full topology. We keep the prior file as
+`services.yaml.pre-demo`.
+
+**Execute:**
 
 ```bash
 python3 - <<'PY'
@@ -344,12 +376,43 @@ print(f"local_ppo_run_id={ppo_run_id}")
 PY
 ```
 
-If `video_bridge` was not built, either build it now or temporarily remove
-the `video_bridge` service before booting.
+**Narrate the dataflow** — this is where the artha-os pattern becomes
+concrete. Walk the user through what `services.yaml` actually wires up:
+
+```text
+Data plane — iceoryx2 shared memory, typed structs, sub-ms latency:
+
+  sim ──▶ inference ──▶ commander ──▶ sim    (50Hz state+cams → 50Hz chunks → 100Hz commands)
+  sim ──▶ data_recorder                       (30Hz episodes: state, cmd, policy cameras)
+  sim ──▶ video_bridge ──HTTP/WS──▶ browser   (UI camera streams)
+
+Control plane — NATS pub/sub, event-based:
+
+  frontend ◀──▶ bridge ◀──▶ eval_runner, param_server, commander
+  (eval start/stop, params, intervention buttons, service health)
+```
+
+The split — typed SHM for high-rate data, NATS for events — is the
+artha-os pattern. iceoryx2's shared-memory transport keeps the inference
+loop tight; NATS makes any service or the browser an event source or
+sink with two lines of code. Another sim, another robot, or a new UI all
+plug into the same two planes; adding a service is a `services.yaml`
+entry plus a Python or Rust process.
 
 ## 6. Enable Demo Recording Sources
 
-The recorder ships as a no-op. For the demo, activate the sim sources.
+**Narrate:** The recorder ships as a no-op. We're activating four
+sources: 7-DOF joint positions from `sim_robot/actual`, 7-DOF commanded
+positions from `sim_robot/desired`, and the two 128×128 policy cameras.
+These get written into the manifest as columns
+(`observation.joint_positions`, `action`) and videos
+(`observation.images.gripper`, `observation.images.overhead`).
+
+The shapes here — 7 joints, 128×128 cameras — are grasp-pickup specific.
+Your own project would define different sources matching its typed
+topics.
+
+**Execute:**
 
 ```bash
 python3 - <<'PY'
@@ -426,7 +489,13 @@ recorder at 30 Hz so the policy camera streams remain the effective anchor.
 
 ## 7. Apply The Project Frontend Overlay
 
-The demo ships a task-specific controls page.
+**Narrate:** The demo project ships a task-specific Controls page that
+renders the UI camera streams plus the eval start/stop button. We swap
+it into `frontend/src/features/controls/pages/ControlsPage.tsx` and
+rebuild. Frontend overlays are how an artha-os project bundles its own
+UI without forking the base frontend.
+
+**Execute:**
 
 ```bash
 python3 - <<'PY'
@@ -446,12 +515,21 @@ cd frontend && npm run build && cd -
 
 ## 8. Boot The Demo Runtime
 
+**Narrate:** The supervisor brings up everything declared in
+`services.yaml` in dependency order. After this, sim is publishing state
+and camera frames at 50Hz, `act_ppo_inference` is loading the checkpoint
+and beginning to predict, `video_bridge` is serving UI camera frames over
+HTTP/WebSocket, and the recorder is idling on the eval-start signal.
+
+**Execute:**
+
 ```bash
 artha up --force
 artha status
 ```
 
-If anything is down:
+If anything is down, triage via logs before asking the user — most
+failures are bad paths, missing deps, or stale SHM:
 
 ```bash
 artha logs supervisor -n 80
@@ -460,11 +538,16 @@ artha logs act_ppo_inference -n 80
 artha logs video_bridge -n 80
 ```
 
-Fix missing dependencies, bad paths, or unbuilt binaries before continuing.
-
 ## 9. Set Eval Provenance
 
-Make the eval data land under the ACT+PPO checkpoint context.
+**Narrate:** Provenance ties this eval to the specific run and checkpoint
+that produced it. Episodes the recorder writes from this point on land
+under that manifest, joinable to the source run, queryable in
+`local_tool`, and pushable back to artha.bot with full lineage intact.
+Without this step the episodes still get recorded — they just float free
+of their source.
+
+**Execute** — first print the local IDs from the clone output:
 
 ```bash
 python3 - <<'PY'
@@ -498,17 +581,34 @@ artha provenance get
 
 ## 10. Hand The User To The Browser
 
+**Narrate:** This is the moment the runtime works end-to-end. Walk the
+user through it instead of dropping a URL — they don't yet know where
+to click or what they're about to see.
+
 Tell the user:
 
-- Open `http://127.0.0.1:8000`.
-- Go to the Controls page.
-- Click the eval/start control.
-- The robot should attempt the block pickup in sim.
-- If it succeeds, the eval stops and a new episode should appear in the
-  Datasets page.
+- Open `http://127.0.0.1:8000`. The frontend is already serving it.
+- Go to the **Controls** page. They'll see two live camera streams
+  (gripper view and overhead view), served by `video_bridge` over the
+  WebSocket, plus an **eval/start** button.
+- Tell them where to click and narrate what's about to happen: when they
+  hit eval/start, a NATS event flips `eval_runner` into running mode;
+  `act_ppo_inference` begins predicting 50-step action chunks at 50Hz
+  off the policy cameras and joint state; `commander` relays each chunk
+  to `sim_robot/desired` at 100Hz; sim executes the commands and steps
+  physics; the recorder writes a new episode at 30Hz. They'll watch the
+  arm in the overhead view reach for the block, close the gripper, and
+  lift.
+- Once the episode ends (success or 20s timeout), tell them to flip to
+  the **Datasets** page — a new episode will be there under
+  `eval-act-ppo-grasp-pickup`, with the joint columns, command columns,
+  and recorded videos all queryable. That page going live is the payoff
+  for the data plane and the provenance step earlier.
 
-If the user reports success or failure, patch the episode reward when the
-episode ID is visible.
+If the user reports success or failure, patch the episode reward when
+the episode ID is visible — that turns the eval result into a structured,
+queryable record that's joinable to other runs and pushable back to
+artha.bot.
 
 ## 11. Explain The Demo Story
 
