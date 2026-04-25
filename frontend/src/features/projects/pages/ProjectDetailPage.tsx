@@ -250,7 +250,7 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
             {syncError ? <div className="projects-status projects-status-error">{syncError}</div> : null}
             {syncJob ? (
               <div className="projects-status">
-                {syncJob.operation} job submitted: <Link to={`/sync?job=${syncJob.job_id}`}>{syncJob.job_id}</Link>. Check the sync jobs page for status.
+                {syncJob.operation} job submitted: <Link to={`/sync?job=${syncJob.job_id}`}>{syncJob.job_id}</Link>. Check the <Link to="/sync">sync jobs page</Link> for status.
               </div>
             ) : null}
           </div>
