@@ -9,9 +9,10 @@ Start with `onboarding/00-orient.md`. Read ONLY that file first.
 1. **Read ONE stage file at a time.** Do NOT open the next stage file
    until the current stage's exact continue token appears verbatim in
    the latest user message.
-2. **Vague confirmations DO NOT count as continue tokens.** "yes", "go",
-   "yee", "sounds good", "looks good", and similar words do not advance
-   the flow. The user must type the literal token string.
+2. **The continue token is the literal word `continue`.** Only that
+   exact word advances the flow. "yes", "go", "yee", "sounds good",
+   "looks good", and similar DO NOT count. The user must type
+   `continue` verbatim in their next message.
 3. **Narration and execution live in separate stage files.** A given
    stage file is EITHER a narration stage (zero executable commands;
    you explain) OR an execution stage (commands you run; the WHY was

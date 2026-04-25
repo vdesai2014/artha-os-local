@@ -98,7 +98,7 @@ when you want to confirm the prod bundle works.
 Demo projects (like grasp-pickup) may ship their own `ControlsPage.tsx`
 at `workspace/<project>/frontend/ControlsPage.tsx`. The agent copies
 this over `frontend/src/features/controls/pages/ControlsPage.tsx` at
-onboarding time. See `docs/onboarding-steps.md` §8c.
+the relevant onboarding stage.
 
 The neutral scaffold is preserved at `docs/templates/ControlsPage.tsx`
 — restore it when unmounting a project.

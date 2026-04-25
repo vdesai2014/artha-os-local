@@ -36,9 +36,11 @@ Explain the following in your own words, in chat, with concrete examples
     sub-millisecond latency. Without it the user cannot see the live
     camera streams.
 
-- **Time and scale.** This is the longest stage on a fresh machine —
-  10–15 minutes typical, longer on cold pip/npm/cargo caches. PyTorch
-  and torchvision wheels alone are several hundred megabytes.
+- **Time and scale.** Decently long on a fresh machine — 10–15 minutes
+  typical, longer on cold pip/npm/cargo caches. PyTorch and torchvision
+  wheels alone are several hundred megabytes. (A later stage that clones
+  the demo project from artha.bot can be similarly long on a slow
+  connection.)
 
 - **The Rust ask.** If `cargo` is not on PATH, you MUST ask the user
   for permission before installing Rust via rustup. Do not silently
@@ -75,7 +77,7 @@ that, and only opens after the user supplies the continue token.
 
 The user must type, EXACTLY, in their next message:
 
-    continue: install-run
+    continue
 
 Vague confirmations ("yes", "sounds good", "go", "yee") DO NOT count.
 

@@ -31,8 +31,6 @@ experiment.
   first.
 - **[`onboard.md`](onboard.md)** — guided first-run flow and canonical
   grasp-pickup demo.
-- **[`docs/onboarding-steps.md`](docs/onboarding-steps.md)** — lower-level
-  dependency install and debugging reference.
 - **[`docs/concepts/`](docs/concepts/)** — *why* the system is shaped
   the way it is (IPC tiers, supervisor lease, cloud model, etc.)
 - **[`docs/operations/`](docs/operations/)** — *how* to extend it (add

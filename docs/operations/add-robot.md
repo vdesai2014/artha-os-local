@@ -196,8 +196,7 @@ Either:
   — rebind `useTopic("robot/actual", "MyRobotState", 20)`, update
   joint count, video URLs, command buttons.
 - Or ship a project-specific `frontend/ControlsPage.tsx` and let the
-  agent overlay it at onboarding time (see `docs/onboarding-steps.md`
-  §8c).
+  agent overlay it at the relevant onboarding stage.
 
 See `docs/operations/modify-frontend.md` for the hook surface.
 

@@ -105,7 +105,7 @@ def _start_nats(root: Path, platform) -> subprocess.Popen:
     log_out = (root / "logs" / "nats.out").open("a", encoding="utf-8")
     log_err = (root / "logs" / "nats.err").open("a", encoding="utf-8")
     if not shutil.which("nats-server"):
-        raise SystemExit(red("nats-server not found on PATH — see docs/onboarding-steps.md §2"))
+        raise SystemExit(red("nats-server not found on PATH — see onboarding/02-install-run.md"))
 
     # Prefer -c <conf> for full fidelity. Some snap-packaged builds can't
     # read paths outside ~/snap (config AND pidfile both fail), in which

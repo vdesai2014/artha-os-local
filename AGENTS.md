@@ -232,7 +232,7 @@ Read on demand — don't preload:
   cameras, robots, frontend mods)
 - `docs/reference/store-api.md` — one-liner per HTTP endpoint
 - `docs/cloud-apis/cloud-api.md` — full cloud API spec
-- `docs/onboarding-steps.md` — fresh-machine bootstrap recipe
+- `onboarding/` — staged first-run flow (entry point: `onboard.md`)
 
 ## When in doubt
 

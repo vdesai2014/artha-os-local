@@ -25,7 +25,7 @@ advance.
   we've done it a second time for real
 - `troubleshooting.md` — write when symptom patterns emerge from use
 - `replicate-experiment.md` — clone-and-run someone else's project;
-  mostly covered by `onboarding-steps.md` + AGENTS.md common-flows
+  mostly covered by `onboarding/` + AGENTS.md common-flows
 - `cloud-collab.md` — multi-user manifest sharing, once the workflow
   stabilizes
 

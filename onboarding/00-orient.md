@@ -67,7 +67,7 @@ NONE. This stage is conversation only.
 
 The user must type, EXACTLY, in their next message:
 
-    continue: install
+    continue
 
 Vague confirmations ("yes", "sounds good", "go", "yee") DO NOT count.
 
