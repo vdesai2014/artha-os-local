@@ -4,22 +4,75 @@ This is the first-run script for a coding agent inside an `artha-os`
 checkout. The goal is to give the user a working local runtime, then walk
 them through the canonical grasp-pickup robot-learning demo.
 
-Keep the user oriented. Before long installs or downloads, explain what is
-about to happen, how long it may take, and what they should expect to see.
-During onboarding, the agent is a guide first and installer second. Explain
-the robot-learning infrastructure problems being solved as you work. Progress
-is good, but silent command execution is a failed onboarding.
+**AGENT: NARRATION IS NOT OPTIONAL.** You MUST keep the user in the loop
+at every step. Before any long install, download, or file edit: explain
+what you are about to do, why, how long it may take, and what they
+should expect to see. Before any conceptual leap — a new SHM struct, a
+new service, a new checkpoint, a cloud sync — explain the robot-learning
+problem it addresses. You are a GUIDE FIRST and an installer second.
+Silent command execution is a failed onboarding, regardless of whether
+the commands themselves succeed. If you find yourself running three
+commands in a row without narrating to the user, STOP and re-orient
+them.
 
-## 0. Explain The Tour
+**The agent's hands-on style is intentional.** Throughout the walkthrough
+the agent patches struct definitions, rewrites `services.yaml`, splices
+recorder code, copies frontend components — by hand, on the user's
+machine. artha-os is not a framework that hides the runtime behind a
+polished API; it's a small, file-based, inspectable system the user can
+hack their own way. The friction of editing real files is the point. The
+system is intentionally under-defined because that's exactly what
+coding-agent capability lets you do — the agent handles the bespoke
+plumbing while the user keeps full visibility into what's running and
+why.
 
-Tell the user:
+## 0. Why artha-os, And The Tour
+
+Tell the user the WHY before describing the tour or running anything.
+They may not know robot learning — make the problems concrete.
+
+**The why.** Robot learning is unusual among ML workflows: half of it is
+OS-level data plumbing, the other half is model training. artha-os
+exists because four pain points keep biting:
+
+- **High-rate, typed data movement that's fast to iterate on.** A robot
+  (real or sim) produces dozens of streams — camera frames, joint state,
+  torque, contact signals — at tens to hundreds of Hz, with controllers
+  publishing back at 100Hz+. artha-os picks low-level primitives (typed
+  shared memory plus a small supervisor) so adding a sensor, swapping a
+  model, or wiring in a new controller is a struct definition plus a
+  `services.yaml` entry — not a rewrite of the transport or a runtime
+  redesign.
+- **Experiment lineage.** Robot learning is a ladder of experiments —
+  collect data, train policy A, evaluate, change architecture, retrain,
+  evaluate again, layer RL on top. After a few weeks you have twenty
+  checkpoints, and "which dataset trained which model produced this
+  eval result?" has no good answer unless every link — code, data,
+  training run, eval episode — is recorded with structured provenance.
+- **Cloud round-trips.** Robots and sims produce more data than fits on
+  a laptop, and training the bigger models needs GPUs the robot machine
+  doesn't have. You push data and code to the cloud, train on a GPU
+  machine there, pull checkpoints back to local for eval. That
+  round-trip happens dozens of times per project; it has to be cheap,
+  additive (never delete by accident), and traceable.
+- **Plumbing dominates.** Most robot-learning work in practice is
+  gluing services together, debugging socket reconnects, normalizing
+  dataset formats, and re-deriving which checkpoint trained on which
+  data. Researchers want their time on the science.
+
+artha-os addresses these directly: typed shared-memory data plane for
+high-rate streams, NATS for control-plane events, a local file-based
+store with first-class provenance, `push`/`pull`/`clone` for cloud
+round-trips, and a runtime small and inspectable enough that a coding
+agent can do the plumbing while the user focuses on the experiment.
+
+**The tour.** Then describe what's about to happen:
 
 - artha-os is an agent-first robot learning platform for local robots,
   datasets, runs, checkpoints, and cloud sharing.
 - This walkthrough is the **grasp-pickup demo** — one application of the
-  tool. The same primitives (typed SHM data plane, NATS control plane,
-  local file-based store, agent-driven service wiring) generalize to other
-  simulated robots and to real robot hardware.
+  tool. The same primitives generalize to other simulated robots and to
+  real robot hardware.
 - The base install brings up NATS, local_tool, the supervisor, and the
   frontend.
 - The guided demo clones a MuJoCo grasp-pickup project from artha.bot,
