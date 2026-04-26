@@ -19,24 +19,29 @@ high-level — the user does not need every architectural detail yet.
   and half model training. Four pain points keep biting; explain
   each one as a *problem*, then say in one sentence how artha-os
   or artha.bot addresses it:
-  1. **High-rate, typed data movement.** Cameras, joints, and
-     robot commands stream at tens-to-hundreds of Hz, and generic
-     plumbing drops frames or stalls. → artha-os pins everything
-     in typed shared memory with one-file definitions, so adding
-     a sensor or policy is a struct + a `services.yaml` entry, not
-     a refactor.
-  2. **Experiment lineage.** After weeks of iteration, "which
-     dataset trained which model that produced this eval?"
-     usually has no good answer. → artha-os records every link
-     automatically — code, data, run, episode, checkpoint — and
-     artha.bot is where lineage gets shared and pushed back.
+  1. **High-rate typed data, plus events.** Robots need two
+     kinds of plumbing: high-rate typed transport for streams
+     like cameras, joint state, and motor commands (tens-to-
+     hundreds of Hz), and lightweight events for things like
+     data-recorder start/stop, parameter changes, and eval
+     triggers. Both surfaces need to change often as the setup
+     evolves. → artha-os builds on iceoryx2 (typed shared memory)
+     and NATS (events), with a quick easy install, so a coding
+     agent can wire new sensors, services, or eval triggers in
+     minutes.
+  2. **Experiment lineage.** After weeks of iteration, tracking
+     "which dataset trained which model that produced this
+     eval?" gets messy and hard to keep straight. → artha-os
+     records every link automatically — code, data, run, episode,
+     checkpoint — and artha.bot is where lineage gets shared and
+     pushed back.
   3. **Cloud round-trips.** Big training needs cloud GPUs; data
      and checkpoints have to travel both ways without flattening.
      → `artha push`/`pull`/`clone` move code, datasets, and
      checkpoints between local and artha.bot — additively,
      traceably.
   4. **Plumbing dominates.** Glue code (socket reconnects, format
-     mismatches, restarts, provenance bookkeeping) eats most of
+     mismatches, restarts, provenance bookkeeping) eats a lot of
      robot-learning time. → artha-os is small, file-based, and
      inspectable enough that a coding agent (you) does that
      plumbing while the user focuses on the experiment.
@@ -68,9 +73,9 @@ now and only THEN ask.
 - [ ] Said what artha-os IS in plain language (1–2 sentences,
        agent-first robot learning platform, local runtime + cloud
        sync).
-- [ ] Named all four pain points (high-rate data, lineage, cloud
-       round-trips, plumbing) AND said in one sentence how
-       artha-os or artha.bot addresses each.
+- [ ] Named all four pain points (high-rate data + events,
+       lineage, cloud round-trips, plumbing) AND said in one
+       sentence how artha-os or artha.bot addresses each.
 - [ ] Described what's on offer: real research project on
        artha.bot, runs locally in a MuJoCo physics simulation (no
        real robot hardware needed), two policies will be compared
