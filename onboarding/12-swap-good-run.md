@@ -266,6 +266,4 @@ episodes on the Datasets page.
 ## Next file
 
 Once the token is received, open `onboarding/13-close-loop.md`. Do
-NOT open it before. Note: `13-close-loop.md` does not yet exist in
-this checkout — if the file is missing, tell the user the next stage
-is not yet authored and stop. Do not improvise the next stage.
+NOT open it before.
