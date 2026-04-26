@@ -9,7 +9,7 @@ lineage on the Datasets page.
 
 ## Required narration
 
-Three short beats, in plain language. Keep each tight; don't go
+Four short beats, in plain language. Keep each tight; don't go
 deep into architecture.
 
 - **What got pulled.** A real research project from artha.bot —
@@ -30,6 +30,15 @@ deep into architecture.
   think about it for the demo, but it's the same pattern that
   scales to a real robot.
 
+- **The agent already linked provenance.** Before any eval click,
+  the agent used NATS to tell the recorder which policy + run +
+  checkpoint is generating the actions you're about to see. So
+  when the new eval episode appears in Datasets, the link back to
+  its source code (the IL training run, this specific checkpoint)
+  is already there — no manual tagging, no remembering which
+  checkpoint was running. The agent does that bookkeeping; the
+  user focuses on the experiment.
+
 - **Now go run the bad eval.** Walk the user through the browser
   flow, bullet by bullet. Make sure they understand the IL policy
   is failing on purpose:
@@ -42,8 +51,10 @@ deep into architecture.
      bottom of the architectural ladder.
   5. When the robot is clearly stuck, click **STOP**.
   6. Go to the **Datasets** page. Find the new episode.
-  7. Click `Run` in the bottom-right of the episode card to see
-     lineage back to the imitation-learning training run.
+  7. On the right-hand side of the Datasets page, find the
+     **provenance** panel. The **Run** linked there is the
+     imitation-learning training run that produced this
+     checkpoint — the link the agent set up via NATS during prep.
   8. Thumbs-down the eval to mark it as a failure.
   9. Come back to chat and type `continue` when done.
 
@@ -59,11 +70,15 @@ missing item now and only THEN ask for the token.
 - [ ] Said one paragraph (high level) about how the OS handles it
        under the hood: typed shared memory for high-rate data, NATS
        for events, agent did the wiring.
+- [ ] Said the agent already used NATS to link the eval's recorded
+       data to the IL run + checkpoint, so provenance shows up
+       automatically in Datasets — no manual tagging.
 - [ ] Set expectation that the IL eval will fail on purpose
        (averages across grasp phases).
 - [ ] Walked the user through the full browser flow (open URL →
-       Controls → start-eval → STOP when stuck → Datasets → Run
-       lineage link → thumbs-down → come back and type `continue`).
+       Controls → start-eval → STOP when stuck → Datasets →
+       right-side provenance panel → Run linked there →
+       thumbs-down → come back and type `continue`).
 
 If any item is unchecked, you have not completed this stage. Do NOT
 request the continue token.
