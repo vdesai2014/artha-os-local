@@ -20,14 +20,19 @@ Three beats, in your own words. Don't dive into file-edit mechanics
 does in the running system, and why the pattern generalizes:
 
 1. **Inference is attached as a service.** The grasp-pickup project
-   came down with the clone, including an ACT+PPO policy and its
-   own inference script. We're going to register that as a service
-   in `services.yaml`, with declared IPC pubs and subs. When the
-   supervisor comes back up, the inference process will subscribe
-   to sim state and camera frames over typed shared memory and
-   publish action-chunk predictions on its own topic. The same
-   mechanic — declare a service, declare its pubs/subs — is how
-   the user wires any future policy or sensor into the runtime.
+   came down with the clone, including multiple trained policies
+   along the architectural ladder previewed in Stage 05 (imitation
+   learning → action chunking → ACT → ACT+PPO). We're starting at
+   the bottom rung — an **imitation learning baseline** — and
+   registering its inference script as a service in `services.yaml`,
+   with declared IPC pubs and subs. When the supervisor comes back
+   up, that inference process will subscribe to sim state and camera
+   frames over typed shared memory and publish action predictions on
+   its own topic. The same mechanic — declare a service, declare
+   its pubs/subs — is how the user wires any future policy or
+   sensor into the runtime, and is also how we will swap to a
+   stronger policy a few stages from now. (We are deliberately
+   starting with the weak one; you will see why in Stage 09.)
 
 2. **Provenance is registered agentically over NATS.** Among the
    services we're adding is `data_recorder` — it subscribes to sim
