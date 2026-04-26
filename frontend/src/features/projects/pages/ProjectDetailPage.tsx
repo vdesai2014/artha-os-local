@@ -9,7 +9,7 @@ import type { SyncJobStartResponse, SyncOperation } from '../../sync/types'
 import { FilesPanel } from '../components/FilesPanel'
 import { MarkdownReadmeEditor } from '../components/MarkdownReadmeEditor'
 import { RunsPanel } from '../components/RunsPanel'
-import { downloadProjectFiles, getProject, listProjectFiles, listRuns } from '../api'
+import { downloadProjectFiles, getProject, getProjectReadme, listProjectFiles, listRuns } from '../api'
 import { saveProjectReadme } from '../readmeSync'
 import type { FileListEntry, ProjectDetail, RunSummary } from '../types'
 
@@ -30,6 +30,7 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [readme, setReadme] = useState('')
   const [savedReadme, setSavedReadme] = useState('')
+  const [readmeRevision, setReadmeRevision] = useState(0)
   const [readmeState, setReadmeState] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -64,25 +65,17 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
 
       if (projectResponse.has_readme) {
         setReadmeState('loading')
-        const download = await downloadProjectFiles(currentProjectId, ['README.md'], getToken)
-        const url = download.urls['README.md']
-
-        if (!url) {
-          setReadme('')
-          setSavedReadme('')
-          setReadmeState('missing')
-          return
-        }
-
-        const response = await fetch(url)
-        const text = await response.text()
+        const response = await getProjectReadme(currentProjectId)
+        const text = response.content
 
         setReadme(text)
         setSavedReadme(text)
+        setReadmeRevision((revision) => revision + 1)
         setReadmeState('ready')
       } else {
         setReadme('')
         setSavedReadme('')
+        setReadmeRevision((revision) => revision + 1)
         setReadmeState('missing')
       }
 
@@ -266,6 +259,7 @@ export function ProjectDetailPage({ workspace }: { workspace: boolean }) {
 
         <section className="project-readme-panel">
           <MarkdownReadmeEditor
+            key={`${project.id}:${readmeRevision}`}
             value={readme}
             editable={Boolean(isOwner)}
             placeholder="README.md will appear here once uploaded."

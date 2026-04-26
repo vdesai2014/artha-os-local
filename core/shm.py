@@ -21,7 +21,12 @@ import iceoryx2 as iox2
 T = TypeVar("T")
 
 # Single entry per blackboard — convention preserved from earlier revs.
-KEY = ctypes.c_ulong(0)
+#
+# WARNING: keep this key type aligned with Rust SHM readers/writers, which use
+# u64. A different ctypes key type can let a service open the blackboard but fail
+# to find the entry, which presents as video/UI clients stuck on "Connecting".
+KEY_TYPE = ctypes.c_uint64
+KEY = KEY_TYPE(0)
 
 # Consecutive write failures before raising (fail-fast).
 # A dead writer is a zombie — crash so the supervisor can restart cleanly.
@@ -81,7 +86,7 @@ class BlackboardWriter:
         """
         builder = lambda: (
             self._node.service_builder(iox2.ServiceName.new(topic))
-            .blackboard_creator(ctypes.c_ulong)
+            .blackboard_creator(KEY_TYPE)
             .add(KEY, initial)
         )
         try:
@@ -107,7 +112,7 @@ class BlackboardWriter:
         try:
             return (
                 self._node.service_builder(iox2.ServiceName.new(topic))
-                .blackboard_opener(ctypes.c_ulong)
+                .blackboard_opener(KEY_TYPE)
                 .open()
             )
         except Exception as e:
@@ -161,7 +166,7 @@ class BlackboardReader:
         self._node = _get_node()
         self._service = (
             self._node.service_builder(iox2.ServiceName.new(topic))
-            .blackboard_opener(ctypes.c_ulong)
+            .blackboard_opener(KEY_TYPE)
             .open()
         )
         self._reader = self._service.reader_builder().create()

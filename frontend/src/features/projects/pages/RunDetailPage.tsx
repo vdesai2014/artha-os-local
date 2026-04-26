@@ -8,7 +8,7 @@ import { FilesPanel } from '../components/FilesPanel'
 import { ManifestLinkPickerModal } from '../components/ManifestLinkPickerModal'
 import { MarkdownReadmeEditor } from '../components/MarkdownReadmeEditor'
 import { ManifestViewerModal } from '../components/ManifestViewerModal'
-import { downloadRunFiles, getProject, getRun, listManifests, listRunFiles, listRuns, updateRun } from '../api'
+import { downloadRunFiles, getProject, getRun, getRunReadme, listManifests, listRunFiles, listRuns, updateRun } from '../api'
 import { saveRunReadme } from '../runReadmeSync'
 import type { FileListEntry, ManifestSummary, ProjectDetail, RunDetail, RunLink, RunSummary } from '../types'
 
@@ -124,6 +124,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   const [manifestPickerScope, setManifestPickerScope] = useState<'all' | 'shared'>('all')
   const [readme, setReadme] = useState('')
   const [savedReadme, setSavedReadme] = useState('')
+  const [readmeRevision, setReadmeRevision] = useState(0)
   const [readmeState, setReadmeState] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -157,22 +158,16 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
 
       if (runResponse.has_readme) {
         setReadmeState('loading')
-        const download = await downloadRunFiles(runId, ['README.md'], getToken)
-        const url = download.urls['README.md']
-        if (!url) {
-          setReadme('')
-          setSavedReadme('')
-          setReadmeState('missing')
-          return
-        }
-        const response = await fetch(url)
-        const text = await response.text()
+        const response = await getRunReadme(runId)
+        const text = response.content
         setReadme(text)
         setSavedReadme(text)
+        setReadmeRevision((revision) => revision + 1)
         setReadmeState('ready')
       } else {
         setReadme('')
         setSavedReadme('')
+        setReadmeRevision((revision) => revision + 1)
         setReadmeState('missing')
       }
 
@@ -342,6 +337,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
         <div className="run-detail-grid">
           <section className="run-detail-card run-editor-card">
             <MarkdownReadmeEditor
+              key={`${run.id}:${readmeRevision}`}
               value={readme}
               editable={Boolean(isOwner)}
               placeholder="README.md will appear here once uploaded."
