@@ -1,44 +1,114 @@
-# Stage 08 — Wire Demo Services (Execution)
+# Stage 01 — Prepare (Execution)
 
 ## Goal
 
-Wire the imitation learning baseline policy and supporting services
-into the runtime: add SHM types, replace `services.yaml`, activate
-recorder sources, copy the project's frontend overlay, and rebuild
-the frontend bundle.
+Do all the agent-driven prep in one pass: install dependencies,
+boot the base runtime, clone the demo project from artha.bot, wire
+the imitation-learning baseline as a service, boot the demo
+runtime, and register the IL eval provenance.
 
-## Do NOT re-narrate the WHY
+This stage runs many commands in sequence. ~20–30 minutes total on
+a fresh machine.
 
-The user has already heard, in Stage 07, that we are attaching the
-IL baseline as a service, that recorder + provenance work over NATS,
-and that NATS bridges frontend ↔ runtime. DO NOT re-explain those.
+## No re-narration
 
-You may, and should, surface short progress markers as edits land
-("SHM types added", "services.yaml swapped, IL inference wired",
-"recorder sources activated", "frontend overlay copied", "frontend
-rebuilt"). You MUST surface any failure immediately, in chat.
+The user already heard, in Stage 00, why we install, what the demo
+arc is, and where the agent fits. DO NOT re-explain those.
 
-## Agent-only context (do not narrate to user)
+You may, and should, surface short progress markers as steps
+complete: "install done", "base runtime up", "clone running — X
+files / Y MB", "demo wiring in place", "demo runtime up",
+"provenance set". You MUST surface any failure immediately, in
+chat, with the relevant log tail.
 
-The clone JSON at `/tmp/artha-grasp-clone.json` contains `id_remaps`,
-but for `services.yaml` the IL run identity (project_id, run_id) is
-read directly from `run.json` inside the local IL run directory —
-those IDs are already remapped by the clone. The IL inference script
-lives at `<il_run_dir>/inference.py` and looks for its checkpoint at
-`checkpoints/best.pt` relative to its own directory.
+## Auto-flow note
 
-Five edits land in this stage; do them in order so the supervisor has
-a complete topology before later stages restart it.
+This stage does NOT require a `continue` token. As soon as the
+success criteria are met, immediately open
+`onboarding/02-meet-the-demo.md` and start narrating from there.
 
 ## Allowed commands
 
-Run, in order:
+Run the following blocks in order.
+
+### Step 1 — Install dependencies
 
 ```bash
-# 1. Add demo SHM types to core/types.py
+# Python + ML — try `--user` first; fall back to a project-local
+# venv only if the install fails specifically with
+# `error: externally-managed-environment` (PEP 668). Do NOT switch
+# to venv for unrelated failures (network, dep conflicts).
+
+# Path A — standard --user install
+python3 -m pip install --user -e .
+python3 -m pip install --user mujoco torch torchvision einops
+
+# Path B — fallback to .venv/ if Path A errored with PEP 668. After
+# this path, future shells need `source .venv/bin/activate` to find
+# the `artha` CLI on PATH.
+#
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   python3 -m pip install -e .
+#   python3 -m pip install mujoco torch torchvision einops
+
+# Frontend
+cd frontend && npm install && npm run build && cd -
+
+# NATS server (only if missing)
+if ! command -v nats-server >/dev/null; then
+  OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+  ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+  VER=$(python3 -c "import json,urllib.request; print(json.load(urllib.request.urlopen('https://api.github.com/repos/nats-io/nats-server/releases/latest'))['tag_name'])")
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL "https://github.com/nats-io/nats-server/releases/download/${VER}/nats-server-${VER}-${OS}-${ARCH}.tar.gz" | tar -xz -C /tmp
+  install -m755 "/tmp/nats-server-${VER}-${OS}-${ARCH}/nats-server" "$HOME/.local/bin/"
+fi
+nats-server --version
+
+# Rust install (ONLY with explicit user permission — rustup is a
+# ~250MB unbounded download).
+if ! command -v cargo >/dev/null; then
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+  source "$HOME/.cargo/env"
+fi
+
+# video_bridge
+cd services/video_bridge && cargo build --release && cd -
+```
+
+### Step 2 — Boot the base runtime and verify
+
+```bash
+artha up
+artha status
+```
+
+If a port is occupied (4222 or 8000), ask the user before using
+`--force`. If `artha status` shows a service down, triage with
+`artha logs <name> -n 80` before continuing.
+
+### Step 3 — Clone the demo project from artha.bot
+
+This pulls ~10–15 minutes of assets — code, runs, manifests,
+episodes, checkpoints. Surface the sync-job id and periodic file/
+byte progress to the user.
+
+```bash
+artha clone proj_541fcc9a31b844579dcb91175d8b6c17 --output /tmp/artha-grasp-clone.json
+```
+
+### Step 4 — Stop the runtime so we can edit services.yaml safely
+
+```bash
+artha down
+```
+
+### Step 5 — Add the demo SHM types to core/types.py
+
+```bash
 python3 - <<'PY'
 from pathlib import Path
-
 p = Path("core/types.py")
 s = p.read_text()
 if "class RobStrideState" not in s:
@@ -90,9 +160,11 @@ PY
 
 # Clear stale SHM segments if struct sizes changed across runs.
 rm -rf /tmp/iceoryx2
+```
 
-# 2. Replace services.yaml with the demo runtime (IL baseline). Backup
-# the prior file as services.yaml.pre-demo.
+### Step 6 — Replace services.yaml with the IL-baseline demo runtime
+
+```bash
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -210,18 +282,14 @@ imitation_learning_inference:
       camera/gripper_policy: CameraFrame
       camera/overhead_policy: CameraFrame
 ''')
-
-print(f"project_dir={project_dir}")
-print(f"il_dir={il_dir}")
-print(f"local_project_id={project_id}")
-print(f"local_il_run_id={il_run_id}")
 PY
+```
 
-# 3. Activate recorder sources for the demo (joint state, joint command,
-# both policy cameras).
+### Step 7 — Activate recorder sources
+
+```bash
 python3 - <<'PY'
 from pathlib import Path
-
 p = Path("services/data_recorder/main.py")
 s = p.read_text()
 marker = "# Active sim-demo source config inserted by onboarding"
@@ -285,60 +353,91 @@ SOURCES = [
     s = s.replace("SOURCES: list[Source] = []", active)
     p.write_text(s)
 PY
+```
 
-# 4. Copy the project's frontend Controls page overlay into the
-# base frontend tree.
+### Step 8 — Apply the project's frontend overlay
+
+```bash
 python3 - <<'PY'
 from pathlib import Path
-
 project_dir = sorted(Path("workspace").glob("grasp-pickup__*"))[-1]
 src = project_dir / "frontend" / "ControlsPage.tsx"
 dst = Path("frontend/src/features/controls/pages/ControlsPage.tsx")
 if not src.exists():
     raise SystemExit(f"missing project controls page: {src}")
 dst.write_text(src.read_text())
-print(f"copied {src} -> {dst}")
 PY
 
-# 5. Rebuild the frontend bundle so the supervisor serves the updated
-# Controls page.
 cd frontend && npm run build && cd -
 ```
 
-You may NOT run `artha up`, set provenance, or touch the runtime in
-any other way. Those belong to Stage 10.
+### Step 9 — Boot the demo runtime
+
+```bash
+artha up --force
+artha status
+```
+
+If `imitation_learning_inference` or any service is down, triage:
+
+```bash
+artha logs imitation_learning_inference -n 80
+artha logs supervisor -n 80
+artha logs video_bridge -n 80
+```
+
+### Step 10 — Register IL eval provenance over NATS
+
+```bash
+eval "$(python3 - <<'PY'
+import json
+from pathlib import Path
+projects = sorted(Path("workspace").glob("grasp-pickup__*"))
+project_dir = projects[-1]
+il_dirs = sorted(project_dir.glob("runs/**/imitation-learning__*"))
+il_dir = il_dirs[-1]
+meta = json.loads((il_dir / "run.json").read_text())
+print(f"export ARTHA_PROJECT_ID={meta['project_id']}")
+print(f"export ARTHA_IL_RUN_ID={meta['id']}")
+PY
+)"
+
+artha provenance set \
+  --manifest-name eval-imitation-learning-grasp-pickup \
+  --manifest-type eval \
+  --policy-name imitation-learning-cnn-mlp \
+  --source-project-id "$ARTHA_PROJECT_ID" \
+  --source-run-id "$ARTHA_IL_RUN_ID" \
+  --source-checkpoint checkpoints/best.pt \
+  --fps 30
+
+artha provenance get
+```
 
 ## Success criteria
 
-- `core/types.py` contains `class RobStrideState`, `class
-  RobStrideCommand`, and `class CameraFrame`.
-- `services.yaml.pre-demo` exists (backup of the base config).
-- `services.yaml` declares an `imitation_learning_inference` service
-  whose `cmd` points at the IL run's `inference.py` and whose
-  `SOURCE_RUN_ID` is set.
-- `services/data_recorder/main.py` contains the marker comment
-  "Active sim-demo source config inserted by onboarding".
-- `frontend/src/features/controls/pages/ControlsPage.tsx` matches the
-  project's overlay (different size or hash than the neutral
-  scaffold).
-- `frontend/dist/index.html` has been rebuilt (newer mtime).
+- `which artha` resolves; `frontend/dist/index.html` exists;
+  `nats-server --version` prints 2.x; the `video-bridge` release
+  binary exists.
+- `/tmp/artha-grasp-clone.json` exists; `workspace/grasp-pickup__*`
+  has `runs/`, `manifests/`, `episodes/`.
+- `core/types.py` has `RobStrideState`, `RobStrideCommand`,
+  `CameraFrame`.
+- `services.yaml.pre-demo` exists; `services.yaml` declares
+  `imitation_learning_inference` with `cmd` pointing at the IL run
+  dir's `inference.py`.
+- `services/data_recorder/main.py` has the sim-demo source config
+  marker.
+- `artha status` shows the demo runtime services running:
+  `imitation_learning_inference`, `commander`, `data_recorder`,
+  `video_bridge`, `eval_runner`, plus the base components.
+- `artha provenance get` returns the IL eval manifest.
 
-If any step fails, surface in chat and triage before requesting the
-continue token. Common failures: missing `run.json` in the IL run dir
-(check the clone completed cleanly), the project's
-`frontend/ControlsPage.tsx` not present (older project structure —
-flag and ask), or `core/types.py` missing the `import ctypes` it
-already depends on (rare; surface the traceback).
-
-## Continue token
-
-The user must type, EXACTLY, in their next message:
-
-    continue
-
-Vague confirmations DO NOT count.
+If any criterion fails, surface in chat and triage. Do NOT auto-flow
+to Stage 02 with a broken runtime.
 
 ## Next file
 
-Once the token is received, open `onboarding/09-boot-bad.md`. Do NOT
-open it before.
+Once all success criteria are met, immediately open
+`onboarding/02-meet-the-demo.md` and start narrating from there.
+There is no continue token — auto-flow.

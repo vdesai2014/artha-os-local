@@ -1,22 +1,27 @@
-# Stage 12 — Swap To ACT+PPO (Execution)
+# Stage 03 — Swap To The Better Policy (Execution)
 
 ## Goal
 
 Swap `imitation_learning_inference` for `act_ppo_inference` in
 `services.yaml`, register a new eval provenance manifest for the
-ACT+PPO checkpoint, restart the runtime, and hand the user back to
-the browser for the success eval.
+ACT+PPO checkpoint, and restart the runtime so the next eval runs
+the better policy.
 
-## Do NOT re-narrate the WHY
+## No re-narration
 
-The user has already heard, in Stage 11, what ACT+PPO is, why it
-works where IL didn't, and the swap mechanic. DO NOT re-explain
-those.
+The user knows from Stage 02 that this is the moment we swap to a
+better policy. DO NOT re-explain why we're doing this. Surface
+short progress markers as the swap lands ("services.yaml updated
+for ACT+PPO", "supervisor restarted", "act_ppo inference loaded
+checkpoint", "provenance set"). Surface any failure immediately,
+in chat.
 
-You may, and should, surface short progress markers as the swap
-lands ("services.yaml updated", "act_ppo run identified",
-"provenance set", "supervisor up", "act_ppo inference loaded
-checkpoint"). You MUST surface any failure immediately, in chat.
+## Auto-flow note
+
+This stage does NOT require a `continue` token. As soon as the
+success criteria are met, immediately open
+`onboarding/04-witness-progression.md` and start narrating from
+there.
 
 ## Agent-only context (do not narrate to user)
 
@@ -24,21 +29,18 @@ The ACT+PPO run is deeply nested in the project's parent-child run
 chain: `runs/imitation-learning__*/runs/il-action-chunking__*/runs/
 act-reference__*/runs/act-ppo-dense-affine__*`. The recursive glob
 `runs/**/act-ppo-dense-affine__*` resolves it correctly from the
-project root.
-
-The ACT+PPO inference script hardcodes its checkpoint paths to
-`SCRIPT_DIR/checkpoints/rl_best_eval.ckpt` (and `bc_init.ckpt` for
-the BC initialization). The `SOURCE_CHECKPOINT` env var is provenance
-metadata only, not used for loading.
+project root. The ACT+PPO inference script hardcodes its checkpoint
+to `SCRIPT_DIR/checkpoints/rl_best_eval.ckpt`; `SOURCE_CHECKPOINT`
+is provenance metadata only.
 
 ## Allowed commands
 
 Run, in order:
 
 ```bash
-# 1. Rewrite services.yaml to swap IL inference for ACT+PPO. Same
-# topology as Stage 08 otherwise — only the inference service (and
-# commander POLICY_NAME) change.
+# 1. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
+# topology as Stage 01 otherwise; only the inference service and
+# commander POLICY_NAME change.
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -155,20 +157,13 @@ act_ppo_inference:
       camera/gripper_policy: CameraFrame
       camera/overhead_policy: CameraFrame
 ''')
-
-print(f"ppo_dir={ppo_dir}")
-print(f"local_project_id={project_id}")
-print(f"local_ppo_run_id={ppo_run_id}")
 PY
 
-# 2. Restart the runtime with the new topology.
+# 2. Restart with the new topology.
 artha up --force
 artha status
 
-# 3. Pull project_id and PPO run_id into shell vars from local run.json
-# (already remapped by clone), then register the ACT+PPO eval provenance
-# over NATS. New manifest name so it's distinct from Stage 10's IL
-# eval manifest.
+# 3. Register ACT+PPO eval provenance over NATS.
 eval "$(python3 - <<'PY'
 import json
 from pathlib import Path
@@ -191,13 +186,10 @@ artha provenance set \
   --source-checkpoint checkpoints/rl_best_eval.ckpt \
   --fps 30
 
-# 4. Verify provenance is set.
 artha provenance get
 ```
 
-If `artha status` shows a service down (e.g., `act_ppo_inference`
-fails to load `rl_best_eval.ckpt`, or commander/recorder lose their
-SHM links), triage before continuing:
+If `artha status` shows a service down, triage:
 
 ```bash
 artha logs act_ppo_inference -n 80
@@ -205,65 +197,21 @@ artha logs supervisor -n 80
 artha logs commander -n 80
 ```
 
-You may NOT chain further swaps; this is the final policy run for
-the demo.
-
-## Hand off to the user
-
-Once `artha status` is clean and `artha provenance get` shows the
-new ACT+PPO eval manifest, surface this checklist (do NOT re-narrate
-the WHY — they heard it in Stage 11):
-
-1. Switch back to the browser tab at `http://127.0.0.1:8000` (still
-   up from Stage 10's runtime; refresh if the websocket dropped
-   during the restart).
-2. Go to the **Controls** page.
-3. Click **start-eval**. The robot will reach for the block.
-4. Watch it close the gripper at the right moment and lift the
-   block.
-5. The eval auto-ends on success (or 20s timeout — but it should
-   succeed).
-6. Go to the **Datasets** page. There are now TWO episodes — the
-   failed IL eval from Stage 10 and this new ACT+PPO success eval.
-7. Click `Run` on the new episode to confirm lineage links back to
-   the `act-ppo-dense-affine` training run (different run, different
-   manifest from the IL eval).
-8. Thumbs-up the eval (contrast with the thumbs-down on the IL one).
-9. Come back to chat and type `continue` when done.
-
-Wait for the literal `continue` token. Do NOT proceed to Stage 13
-before the user has explicitly typed it.
-
 ## Success criteria
 
-- `services.yaml` declares `act_ppo_inference` with `cmd` pointing
-  at the deeply-nested ACT+PPO run dir's `inference.py` and
-  `SOURCE_RUN_ID` set to the local ACT+PPO run id.
-- `services.yaml` does NOT contain `imitation_learning_inference`
-  anymore.
+- `services.yaml` declares `act_ppo_inference` (no longer
+  `imitation_learning_inference`) pointing at the deeply-nested
+  ACT+PPO run dir's `inference.py`.
 - `artha status` shows `act_ppo_inference` running.
-- `artha provenance get` returns an eval manifest with
-  `manifest-name: eval-act-ppo-grasp-pickup`,
-  `policy-name: act-ppo-dense-affine`, and the local ACT+PPO
+- `artha provenance get` returns the
+  `eval-act-ppo-grasp-pickup` manifest with the local ACT+PPO
   `source-run-id`.
-- After the user finishes, they have reported in chat that the
-  ACT+PPO eval ran successfully and that they saw both episodes
-  (IL + ACT+PPO) on the Datasets page with distinct lineage.
 
-If any of the above is wrong, surface in chat and triage before
-requesting the continue token.
-
-## Continue token
-
-The user must type, EXACTLY, in their next message:
-
-    continue
-
-Vague confirmations DO NOT count. The user should type `continue`
-ONLY after they have completed the success eval and seen both
-episodes on the Datasets page.
+If any criterion fails, surface in chat and triage. Do NOT auto-flow
+to Stage 04 with a broken runtime.
 
 ## Next file
 
-Once the token is received, open `onboarding/13-close-loop.md`. Do
-NOT open it before.
+Once all success criteria are met, immediately open
+`onboarding/04-witness-progression.md` and start narrating from
+there. There is no continue token — auto-flow.
