@@ -93,7 +93,4 @@ Vague confirmations DO NOT count.
 ## Next file
 
 Once the token is received, open `onboarding/08-wire-services-run.md`.
-Do NOT open it before. Note: `08-wire-services-run.md` does not yet
-exist in this checkout — if the file is missing, tell the user the
-next stage is not yet authored and stop. Do not improvise the next
-stage.
+Do NOT open it before.
