@@ -2,19 +2,21 @@
 
 ## Goal
 
-Swap `imitation_learning_inference` for `act_ppo_inference` in
-`services.yaml`, register a new eval provenance manifest for the
-ACT+PPO checkpoint, and restart the runtime so the next eval runs
-the better policy.
+Attach the IL eval manifest as an output of the IL run (so it
+travels with the run if the user later pushes the project to
+artha.bot). Then swap `imitation_learning_inference` for
+`act_ppo_inference` in `services.yaml`, register a new eval
+provenance manifest for the ACT+PPO checkpoint, and restart the
+runtime so the next eval runs the better policy.
 
 ## No re-narration
 
 The user knows from Stage 02 that this is the moment we swap to a
 better policy. DO NOT re-explain why we're doing this. Surface
-short progress markers as the swap lands ("services.yaml updated
-for ACT+PPO", "supervisor restarted", "act_ppo inference loaded
-checkpoint", "provenance set"). Surface any failure immediately,
-in chat.
+short progress markers as steps land ("IL eval manifest linked to
+IL run", "services.yaml updated for ACT+PPO", "supervisor
+restarted", "act_ppo inference loaded checkpoint", "provenance
+set"). Surface any failure immediately, in chat.
 
 ## Auto-flow note
 
@@ -38,7 +40,46 @@ is provenance metadata only.
 Run, in order:
 
 ```bash
-# 1. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
+# 1. Link the IL eval manifest as an output of the IL run. The IL
+# eval already happened in Stage 02 while the runtime was up, so
+# the manifest exists in local_tool. We attach it now so the eval
+# travels with the IL run on cloud push.
+python3 - <<'PY'
+import json, urllib.request
+from pathlib import Path
+
+API = "http://127.0.0.1:8000/api"
+
+# Find the IL eval manifest by name.
+manifests = json.loads(urllib.request.urlopen(f"{API}/manifests?type=eval").read())["manifests"]
+manifest = next(m for m in manifests if m["name"] == "eval-imitation-learning-grasp-pickup")
+
+# Find the IL run id from local run.json (already remapped by clone).
+project_dir = sorted(Path("workspace").glob("grasp-pickup__*"))[-1]
+il_dir = sorted(project_dir.glob("runs/**/imitation-learning__*"))[-1]
+run_id = json.loads((il_dir / "run.json").read_text())["id"]
+
+# Read current links; skip if already linked (idempotent).
+run = json.loads(urllib.request.urlopen(f"{API}/runs/{run_id}").read())
+links = run.get("links") or []
+if not any(L.get("target_id") == manifest["id"] for L in links):
+    links.append({
+        "type": "output",
+        "target_type": "manifest",
+        "target_id": manifest["id"],
+        "label": manifest["name"],
+    })
+    req = urllib.request.Request(
+        f"{API}/runs/{run_id}",
+        method="PATCH",
+        data=json.dumps({"links": links}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req).read()
+print(f"Linked manifest {manifest['id']} as output of IL run {run_id}")
+PY
+
+# 2. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
 # topology as Stage 01 otherwise; only the inference service and
 # commander POLICY_NAME change.
 python3 - <<'PY'
@@ -159,11 +200,11 @@ act_ppo_inference:
 ''')
 PY
 
-# 2. Restart with the new topology.
+# 3. Restart with the new topology.
 artha up --force
 artha status
 
-# 3. Register ACT+PPO eval provenance over NATS.
+# 4. Register ACT+PPO eval provenance over NATS.
 eval "$(python3 - <<'PY'
 import json
 from pathlib import Path
@@ -199,6 +240,10 @@ artha logs commander -n 80
 
 ## Success criteria
 
+- The IL run now has an output link to the
+  `eval-imitation-learning-grasp-pickup` manifest (the link
+  script's print statement above confirms `Linked manifest <id>
+  as output of IL run <id>`).
 - `services.yaml` declares `act_ppo_inference` (no longer
   `imitation_learning_inference`) pointing at the deeply-nested
   ACT+PPO run dir's `inference.py`.

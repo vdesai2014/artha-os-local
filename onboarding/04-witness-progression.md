@@ -88,5 +88,5 @@ episodes on the Datasets page.
 
 ## Next file
 
-Once the token is received, open `onboarding/05-close-loop.md`. Do
-NOT open it before.
+Once the token is received, open
+`onboarding/05-link-act-ppo-output.md`. Do NOT open it before.
