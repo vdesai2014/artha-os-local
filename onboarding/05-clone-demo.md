@@ -20,6 +20,15 @@ examples (do not paraphrase, do not just recite):
   machine with full lineage intact. This is the "pull" half of the
   cloud round-trip pain point from Stage 00.
 
+- **Real robot research, accessible.** The project on artha.bot is a
+  manipulation-learning progression walking the standard ladder —
+  imitation learning, action chunking, ACT, ACT+PPO — with all the
+  runs and checkpoints organized the way a working researcher would
+  organize them. Part of what artha.bot is for is making this kind of
+  robot research legible and reproducible by anyone with a laptop and
+  a coding agent. We will come back to the ladder when we run the
+  policies in later stages.
+
 - **The artha.bot data model.** The clone reveals how artha-os
   organizes work — surface it to the user so they can find their way
   around `local_tool` afterward:

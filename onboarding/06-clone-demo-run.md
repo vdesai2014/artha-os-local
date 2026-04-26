@@ -36,7 +36,7 @@ Run, in order:
 # Clone the grasp-pickup project from artha.bot. The stack must be UP
 # for this — local_tool runs the sync job. Surface the sync-job id
 # and periodic progress to the user.
-artha clone proj_e5509f6a7a0443eb913be950c6a0fac9 --output /tmp/artha-grasp-clone.json
+artha clone proj_541fcc9a31b844579dcb91175d8b6c17 --output /tmp/artha-grasp-clone.json
 ```
 
 After clone completes successfully:
