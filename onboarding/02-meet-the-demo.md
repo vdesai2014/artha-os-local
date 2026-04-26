@@ -49,7 +49,7 @@ deep into architecture.
      phases (approach, close, lift) and never quite closes the
      gripper at the right moment. This is by design — it's the
      bottom of the architectural ladder.
-  5. When the robot is clearly stuck, click **STOP**.
+  5. When the robot is clearly stuck, click **Cancel Eval**.
   6. Go to the **Datasets** page. Find the new episode.
   7. On the right-hand side of the Datasets page, find the
      **provenance** panel. The **Run** linked there is the
@@ -76,7 +76,7 @@ missing item now and only THEN ask for the token.
 - [ ] Set expectation that the IL eval will fail on purpose
        (averages across grasp phases).
 - [ ] Walked the user through the full browser flow (open URL →
-       Controls → start-eval → STOP when stuck → Datasets →
+       Controls → start-eval → Cancel Eval when stuck → Datasets →
        right-side provenance panel → Run linked there →
        thumbs-down → come back and type `continue`).
 
