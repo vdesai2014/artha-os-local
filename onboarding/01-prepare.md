@@ -419,8 +419,12 @@ artha provenance get
 - `which artha` resolves; `frontend/dist/index.html` exists;
   `nats-server --version` prints 2.x; the `video-bridge` release
   binary exists.
-- `/tmp/artha-grasp-clone.json` exists; `workspace/grasp-pickup__*`
-  has `runs/`, `manifests/`, `episodes/`.
+- `/tmp/artha-grasp-clone.json` exists; `workspace/grasp-pickup__*/`
+  exists and contains `runs/` with the trained policies (e.g.,
+  `runs/imitation-learning__*` plus the deeper rungs nested
+  inside it). The workspace's top-level `manifests/` and
+  `episodes/` directories exist but are mostly empty until evals
+  actually run.
 - `core/types.py` has `RobStrideState`, `RobStrideCommand`,
   `CameraFrame`.
 - `services.yaml.pre-demo` exists; `services.yaml` declares
