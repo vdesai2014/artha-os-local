@@ -11,6 +11,10 @@ import httpx
 from cli.common import find_repo_root, local_tool_url, die, dim
 
 
+def _progress(line: str) -> None:
+    print(dim(line), flush=True)
+
+
 def _post_execute(url: str, body: dict, timeout: float = 1800.0) -> dict:
     """One long-blocking call. Sync has no progress stream today (see to-do)."""
     try:
@@ -88,7 +92,7 @@ def _wait_job(url: str, job_id: str, *, quiet: bool = False) -> dict:
         job = _get_job(url, job_id)
         line = _job_line(job)
         if not quiet and line != last_line:
-            print(dim(line))
+            _progress(line)
             last_line = line
         status = job.get("status")
         if status == "succeeded":
@@ -111,7 +115,7 @@ def run(args) -> int:
             "entity_id": args.project_id,
         }
         if not quiet:
-            print(dim(f"cloning {args.project_id}"))
+            _progress(f"cloning {args.project_id}")
     else:
         body = {
             "operation": op,
@@ -121,16 +125,16 @@ def run(args) -> int:
             "include_descendants": bool(args.include_descendants),
         }
         if not quiet:
-            print(dim(f"{op}ing {args.entity_type} {args.entity_id}"))
+            _progress(f"{op}ing {args.entity_type} {args.entity_id}")
 
     job = _post_job(url, body)
     if job is None:
         if not quiet:
-            print(dim("sync jobs endpoint unavailable; falling back to blocking execute"))
+            _progress("sync jobs endpoint unavailable; falling back to blocking execute")
         result = _post_execute(url, body)
     else:
         if not quiet:
-            print(dim(f"sync job {job['job_id']}"))
+            _progress(f"sync job {job['job_id']}")
         result = _wait_job(url, job["job_id"], quiet=quiet)
 
     if getattr(args, "output", None):
@@ -138,7 +142,7 @@ def run(args) -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
         if not quiet:
-            print(dim(f"wrote sync result: {output_path}"))
+            _progress(f"wrote sync result: {output_path}")
 
     if getattr(args, "json", False):
         print(json.dumps(result, indent=2, default=str))

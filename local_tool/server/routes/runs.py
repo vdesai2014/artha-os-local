@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from ...ids import validate_id
 from ...io import StoreError
@@ -32,10 +32,32 @@ class RunCreateBody(BaseModel):
         return validate_id("run", v) if v is not None else None
 
 
+class RunLinkBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    target_type: str
+    target_id: str
+    path: str | None = None
+    label: str | None = None
+
+    @field_validator("target_type")
+    @classmethod
+    def _check_target_type(cls, v: str) -> str:
+        if v != "manifest":
+            raise ValueError("target_type must be manifest")
+        return v
+
+    @field_validator("target_id")
+    @classmethod
+    def _check_target_id(cls, v: str) -> str:
+        return validate_id("manifest", v)
+
+
 class RunPatchBody(BaseModel):
     name: str | None = None
     parent_id: str | None = None
-    links: list[dict] | None = None
+    links: list[RunLinkBody] | None = None
 
 
 class ReadmeBody(BaseModel):

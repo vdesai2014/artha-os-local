@@ -186,6 +186,11 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   }, [loadRunPage])
 
   useEffect(() => {
+    setLinkingBucket(null)
+    setSelectedManifestId(null)
+  }, [projectId, runId])
+
+  useEffect(() => {
     let cancelled = false
 
     async function loadManifestList() {
