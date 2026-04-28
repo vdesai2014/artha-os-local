@@ -2,91 +2,78 @@
 
 ## Goal
 
-Briefly orient the user on what was just pulled and how the runtime
-holds it together at a high level. Then hand them to the browser to
-run the IL eval — which will fail on purpose — and trace the
-lineage on the Datasets page.
+Briefly tell the user what the agent just did, what the demo is,
+and hand them to the in-browser tour for the IL eval. The tour
+walks them through Controls → start-eval → Cancel Eval →
+Datasets → run lineage automatically.
 
 ## Required narration
 
-Four short beats, in plain language. Keep each tight; don't go
-deep into architecture.
+Three short beats, in plain language. Each beat ties what just
+happened back to the data-movement / glue automation framing from
+Stage 00. Don't repeat the 4-pain-points enumeration.
 
-- **What got pulled.** A real research project from artha.bot —
-  not a tutorial fixture. It contains a ladder of trained policies
-  (imitation learning → action chunking → ACT → ACT+PPO), all
-  organized as a parent-child run chain on disk under
-  `workspace/grasp-pickup__*/`. The runtime is currently wired to
+- **What the agent just did.** Installed all dependencies, pulled
+  the grasp-pickup project from artha.bot (the cloud → local
+  hop), wired the imitation-learning inference into
+  `services.yaml`, booted the demo runtime, and registered eval
+  provenance over NATS.
+
+- **What the demo actually is.** A simulated robot in MuJoCo
+  trying to pick up a block. The cloud project is meant to
+  simulate a real research project, iterating from an older less
+  performant approach (CNN+MLP) to something modern that achieves
+  high success rate (ACT+PPO). The runtime is currently wired to
   the bottom rung — a small CNN+MLP imitation-learning baseline
-  that predicts one robot command at a time.
+  (~0% success). In stage 03, we'll swap this out for the
+  ACT+PPO policy.
 
-- **How the runtime holds it together (briefly).** Underneath the
-  demo, high-rate data — camera frames, joint state, robot
-  commands — flows over typed shared memory between the sim, the
-  AI policy, the recorder, and the bridge to the user's browser.
-  NATS is the event bus: eval start/stop clicks, the recorder's
-  provenance link to the source run, parameter changes. The agent
-  wired all of this in the prep step. The user doesn't need to
-  think about it for the demo, but it's the same pattern that
-  scales to a real robot.
+- **Underneath, while you watch:** typed shared memory carrying
+  camera frames + joint state between sim and policy at 50Hz, a
+  recorder writing every episode with the IL run already linked
+  via NATS provenance. All wired by the agent without you typing
+  anything!
 
-- **The agent already linked provenance.** Before any eval click,
-  the agent used NATS to tell the recorder which policy + run +
-  checkpoint is generating the actions you're about to see. So
-  when the new eval episode appears in Datasets, the link back to
-  its source code (the IL training run, this specific checkpoint)
-  is already there — no manual tagging, no remembering which
-  checkpoint was running. The agent does that bookkeeping; the
-  user focuses on the experiment.
+## Browser handoff
 
-- **Now go run the bad eval.** Walk the user through the browser
-  flow, bullet by bullet. Make sure they understand the IL policy
-  is failing on purpose:
-  1. Open `http://127.0.0.1:8000`.
-  2. Go to the **Controls** page.
-  3. Click **start-eval**. The robot will start moving.
-  4. **The IL policy is going to fail.** It averages across grasp
-     phases (approach, close, lift) and never quite closes the
-     gripper at the right moment. This is by design — it's the
-     bottom of the architectural ladder.
-  5. When the robot is clearly stuck, click **Cancel Eval**.
-  6. Go to the **Datasets** page. Find the new episode.
-  7. On the right-hand side of the Datasets page, find the
-     **provenance** panel. The **Run** linked there is the
-     imitation-learning training run that produced this
-     checkpoint — the link the agent set up via NATS during prep.
-  8. Thumbs-down the eval to mark it as a failure.
-  9. Come back to chat and type `continue` when done.
+Tell the user to open this URL in their browser:
+
+    http://127.0.0.1:8000/controls?tour=intro
+
+The in-browser tour will walk them through clicking Start Eval,
+auto-cancelling after a few seconds (the IL policy will
+struggle), and tracing the new episode + lineage on the Datasets
+page. Tell them to come back and type `continue` when the tour
+ends.
 
 ## Mandatory checklist — before requesting `continue`
 
 You MUST have said all of the following, in chat, in your own
-words. Walk every bracketed item; if any is unchecked, narrate the
-missing item now and only THEN ask for the token.
+words. Walk every bracketed item; if any is unchecked, narrate
+the missing item now and only THEN ask.
 
-- [ ] Said what got pulled — a real research project on artha.bot
-       with a ladder of policies — and that the IL baseline is
-       currently loaded.
-- [ ] Said one paragraph (high level) about how the OS handles it
-       under the hood: typed shared memory for high-rate data, NATS
-       for events, agent did the wiring.
-- [ ] Said the agent already used NATS to link the eval's recorded
-       data to the IL run + checkpoint, so provenance shows up
-       automatically in Datasets — no manual tagging.
-- [ ] Set expectation that the IL eval will fail on purpose
-       (averages across grasp phases).
-- [ ] Walked the user through the full browser flow (open URL →
-       Controls → start-eval → Cancel Eval when stuck → Datasets →
-       right-side provenance panel → Run linked there →
-       thumbs-down → come back and type `continue`).
+- [ ] Said what the agent just did (install + clone + wire + boot
+       + provenance).
+- [ ] Said what the demo is — a simulated robot in MuJoCo doing
+       block grasping, the cloud project simulating a real research
+       progression from CNN+MLP to ACT+PPO, the runtime currently
+       wired to the IL baseline, and a swap to ACT+PPO coming in
+       Stage 03.
+- [ ] Said one or two sentences about what's flowing underneath
+       (typed SHM for camera frames + joint state at 50Hz, NATS
+       for provenance/events, all agent-wired) so the user sees
+       the data-movement and glue layers in motion.
+- [ ] Pointed the user at `http://127.0.0.1:8000/controls?tour=intro`
+       and told them to come back + type `continue` when the
+       in-browser tour ends.
 
-If any item is unchecked, you have not completed this stage. Do NOT
-request the continue token.
+If any item is unchecked, you have not completed this stage. Do
+NOT request the continue token.
 
 ## Allowed commands
 
 **NONE.** This stage is conversation only. The user is doing the
-eval in the browser.
+guided eval in the browser.
 
 ## Continue token
 
@@ -95,10 +82,9 @@ The user must type, EXACTLY, in their next message:
     continue
 
 Vague confirmations DO NOT count. The user should type `continue`
-ONLY after they have completed the browser eval flow and seen the
-Datasets page lineage.
+ONLY after they have completed the in-browser tour.
 
 ## Next file
 
-Once the token is received, open `onboarding/03-swap-policy.md`. Do
-NOT open it before.
+Once the token is received, open `onboarding/03-swap-policy.md`.
+Do NOT open it before.
