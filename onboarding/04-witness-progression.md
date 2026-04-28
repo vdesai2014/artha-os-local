@@ -20,13 +20,12 @@ will land it. Just tell the user the swap is done and what to do.
   eval as an output of the IL run on the way through. Same
   wiring otherwise — only the policy changed.
 
-- **Now go run it again, no tour.** Open
-  `http://127.0.0.1:8000/controls` (no `?tour=intro` this time)
-  and click **Start Eval** like before. The robot should reach,
-  close the gripper at the right moment, and lift the block.
-  Eval auto-ends on success. Then flip to **Datasets** — you'll
-  now see two episodes side by side, one fail and one success,
-  each linked back to its source run.
+- **Now go run it again, with a short second tour.** Open
+  `http://127.0.0.1:8000/controls?tour=intro2`. The tour will
+  auto-click Start Eval, watch the eval-state label until it
+  reads SUCCESS (or until ~10s pass), then bring you to the new
+  episode in Datasets. You'll see two episodes side by side, one
+  fail and one success, each linked back to its source run.
 
 ## Mandatory checklist — before requesting `continue`
 
@@ -37,9 +36,10 @@ the missing item now and only THEN ask.
 - [ ] Said the swap is done — services.yaml rewritten, ACT+PPO
        checkpoint loaded, new provenance registered, IL eval
        linked as output of the IL run.
-- [ ] Pointed the user at `http://127.0.0.1:8000/controls` (no
-       `?tour=intro` this time) and told them to click Start Eval
-       again.
+- [ ] Pointed the user at
+       `http://127.0.0.1:8000/controls?tour=intro2` and told them
+       the tour will auto-run the eval and bring them to the new
+       episode in Datasets.
 - [ ] Set expectation that ACT+PPO will succeed and the eval will
        auto-end, with two comparable episodes appearing on the
        Datasets page.

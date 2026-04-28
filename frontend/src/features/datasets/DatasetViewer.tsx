@@ -411,9 +411,10 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
                     }
                   }}
                 >
-                  <div className="coupon-episode-item-rate">
+                  <div className="coupon-episode-item-rate" data-tour="thumbs">
                     <button
                       type="button"
+                      data-tour="thumbs-up"
                       className={`coupon-rate-btn coupon-rate-up${reward === 1 ? ' is-active' : ''}`}
                       aria-label={reward === 1 ? 'Unrate episode' : 'Rate episode as success'}
                       onClick={(event) => {
@@ -427,6 +428,7 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
                     </button>
                     <button
                       type="button"
+                      data-tour="thumbs-down"
                       className={`coupon-rate-btn coupon-rate-down${reward === 0 ? ' is-active' : ''}`}
                       aria-label={reward === 0 ? 'Unrate episode' : 'Rate episode as fail'}
                       onClick={(event) => {
@@ -573,7 +575,7 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
               <h3>Dataset</h3>
               <span className={`coupon-type-tag coupon-type-${manifest.type}`}>{manifest.type}</span>
             </div>
-            <div className="coupon-metadata-name">{manifest.name}</div>
+            <div className="coupon-metadata-name" data-tour="manifest-name">{manifest.name}</div>
             <div className="coupon-meta-row">
               <span>UUID</span>
               <span className="coupon-meta-uuid">
@@ -674,6 +676,7 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
                   <span>Run</span>
                   {selectedEpisode.source_project_id ? (
                     <Link
+                      data-tour="run-link"
                       to={`/projects/${selectedEpisode.source_project_id}/runs/${selectedEpisode.source_run_id}`}
                       className="coupon-meta-link coupon-meta-mono"
                       title={selectedEpisode.source_run_id}

@@ -70,6 +70,7 @@ function RunLinksPanel({
   onAdd,
   onLinkClick,
   onRemoveLink,
+  dataTour,
 }: {
   title: string
   links: RunLink[]
@@ -78,9 +79,10 @@ function RunLinksPanel({
   onAdd: () => void
   onLinkClick: (link: RunLink) => void
   onRemoveLink: (link: RunLink) => void
+  dataTour?: string
 }) {
   return (
-    <section className="run-detail-card run-links-panel">
+    <section className="run-detail-card run-links-panel" data-tour={dataTour}>
       <div className="run-detail-card-header">
         <span>{title}</span>
         <span className="run-detail-card-header-actions">
@@ -407,6 +409,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
               onAdd={() => setLinkingBucket('outputs')}
               onLinkClick={handleLinkClick}
               onRemoveLink={(link) => void handleRemoveLink(link)}
+              dataTour="run-outputs"
             />
           </div>
         </div>

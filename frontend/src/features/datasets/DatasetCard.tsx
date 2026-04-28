@@ -26,7 +26,7 @@ export function DatasetCard({ manifest, onEdit, onDelete }: DatasetCardProps) {
   const canManage = Boolean(onEdit || onDelete)
 
   return (
-    <article className="project-card dataset-card">
+    <article className="project-card dataset-card" data-tour-manifest={manifest.name}>
       <Link to={`/datasets/${manifest.id}`} className="project-card-surface">
         <div className="project-card-header">
           <div>
