@@ -11,57 +11,34 @@ artha-os should live on their machine.
 Explain in plain language, in chat, with concrete examples. Keep it
 high-level — the user does not need every architectural detail yet.
 
-- **What artha-os is.** An agent-first robot learning platform —
-  local runtime plus cloud sync to artha.bot. The agent (you) does
-  the plumbing while the user focuses on the experiment.
+- **What artha-os is, and why.** Robot learning is dominated by data
+  movement and the glue code that holds it together: high-rate
+  streams between sim, sensors, and policies (local); large datasets
+  and checkpoints round-tripping to cloud GPUs (cloud); and event
+  handling, provenance tracking, and restart logic between them
+  (glue). That muck is where a lot of the time goes. artha-os
+  simplifies all three: typed shared memory (iceoryx2) for the
+  local data plane, `push`/`pull`/`clone` via artha.bot for the
+  cloud round-trip, and NATS + a small supervisor + a file-based
+  local store for the glue. Tight vertical integration means adding
+  a sensor, swapping a policy, or pushing eval data is a one-file
+  or one-command change.
 
-- **Why it exists.** Robot learning is half OS-level data plumbing
-  and half model training. Four pain points keep biting; explain
-  each one as a *problem*, then say in one sentence how artha-os
-  or artha.bot addresses it:
-  1. **High-rate typed data, plus events.** Robots need two
-     kinds of plumbing: high-rate typed transport for streams
-     like cameras, joint state, and motor commands (tens-to-
-     hundreds of Hz), and lightweight events for things like
-     data-recorder start/stop, parameter changes, and eval
-     triggers. Both surfaces need to change often as the setup
-     evolves. → artha-os builds on iceoryx2 (typed shared memory)
-     and NATS (events), with a quick easy install, so a coding
-     agent can wire new sensors, services, or eval triggers in
-     minutes.
-  2. **Experiment lineage.** After weeks of iteration, tracking
-     "which dataset trained which model that produced this
-     eval?" gets messy and hard to keep straight. → artha-os
-     records every link automatically — code, data, run, episode,
-     checkpoint — and artha.bot is where lineage gets shared and
-     pushed back.
-  3. **Cloud round-trips.** Big training needs cloud GPUs; data
-     and checkpoints have to travel both ways without flattening.
-     → `artha push`/`pull`/`clone` move code, datasets, and
-     checkpoints between local and artha.bot — additively,
-     traceably.
-  4. **Plumbing dominates.** Glue code (socket reconnects, format
-     mismatches, restarts, provenance bookkeeping) eats a lot of
-     robot-learning time. → artha-os is small, file-based, and
-     inspectable enough that a coding agent (you) does that
-     plumbing while the user focuses on the experiment.
+- **Why it's agent-first.** A coding agent handles the muck for
+  the user: wires the data plumbing, registers provenance,
+  replicates code and data to and from the cloud. This allows for
+  users to focus on the experiment instead of ancillary logic.
 
-- **What's on offer (the demo).** A grasp-pickup robot manipulation
-  research project hosted on artha.bot — real research, not a
-  tutorial fixture. The agent will pull it down and run it on the
-  user's machine in a **MuJoCo physics simulation** (no real robot
-  hardware needed; everything is simulated, locally). The user will
-  compare two of the project's trained policies in a browser:
-  first a deliberately-weak imitation-learning baseline (it will
-  fail; that's the point), then a much-better ACT+PPO policy that
-  should succeed. Both evals end up side-by-side in the user's own
-  local datasets, with full lineage to the runs that produced them.
-  Total ~20–30 minutes of agent work plus a few minutes of
-  clicking.
+- **What's on offer.** A sample project on artha.bot — a simulated
+  robot doing block grasping in MuJoCo, with pre-trained policies.
+  The agent will install the runtime, pull the project, and walk
+  you through running two policies: a deliberately-weak one that
+  fails on purpose, then a strong one that succeeds. The point is
+  to see the data-movement and glue automation in action, end to
+  end. ~20–30 min total.
 
-- **Where to drop it.** Default is the current artha-os checkout
-  directory — pip editable install, node_modules, cargo target, and
-  the demo workspace all land here. Confirm with the user.
+- **Permission to proceed?** Confirm, and confirm the default
+  install location (current artha-os checkout dir).
 
 ## Mandatory checklist — before requesting `continue`
 
@@ -70,19 +47,18 @@ words. Before asking the user for the token, mentally walk through
 every bracketed item; if any is unchecked, narrate the missing item
 now and only THEN ask.
 
-- [ ] Said what artha-os IS in plain language (1–2 sentences,
-       agent-first robot learning platform, local runtime + cloud
-       sync).
-- [ ] Named all four pain points (high-rate data + events,
-       lineage, cloud round-trips, plumbing) AND said in one
-       sentence how artha-os or artha.bot addresses each.
-- [ ] Described what's on offer: real research project on
-       artha.bot, runs locally in a MuJoCo physics simulation (no
-       real robot hardware needed), two policies will be compared
-       (one fails on purpose, one succeeds), in-browser eval, ~20–
-       30 min total.
-- [ ] Asked the user for permission to proceed AND confirmed the
-       install location.
+- [ ] Said what artha-os IS, framed around the three muck areas it
+       simplifies (local data movement, cloud round-trip, glue
+       between them), naming the underlying primitives (iceoryx2
+       SHM, NATS events, supervisor, file-based local store,
+       `push`/`pull`/`clone`).
+- [ ] Said why it's agent-first — a coding agent wires plumbing,
+       registers provenance, and replicates code/data between local
+       and cloud, so the user can focus on the experiment.
+- [ ] Described what's on offer: a sample project on artha.bot, a
+       simulated robot in MuJoCo, two policies (one fails on
+       purpose, one succeeds), in-browser eval, ~20–30 min total.
+- [ ] Asked permission to proceed AND confirmed install location.
 
 If any item is unchecked, you have not completed this stage. Do NOT
 request the continue token.
