@@ -6,13 +6,10 @@ const Joyride = React.lazy(() =>
   import('react-joyride').then((m) => ({ default: m.Joyride })),
 )
 
-const COMPLETE_FLAG = 'artha-intro-tour-complete'
-const COMPLETE_FLAG_2 = 'artha-intro2-tour-complete'
-
-// Dev toggle — when true, the localStorage "tour-complete" flag is
-// ignored, so visiting `?tour=intro` (or `?tour=intro2`) always
-// replays. Flip to false for production gating.
-const DEV_TOUR_REPLAY = true
+// Tours are gated purely on the URL param (`?tour=intro` or
+// `?tour=intro2`). Visiting plain `/` is the no-tour state; the
+// query-bearing URL always replays. No localStorage involved —
+// re-running is just a refresh.
 
 const IL_MANIFEST_NAME = 'eval-imitation-learning-grasp-pickup'
 const ACT_PPO_MANIFEST_NAME = 'eval-act-ppo-grasp-pickup'
@@ -212,10 +209,6 @@ async function resolveRoute(route: Route): Promise<string | null> {
   return null
 }
 
-function getCompleteFlag(tourKind: 'intro' | 'intro2'): string {
-  return tourKind === 'intro2' ? COMPLETE_FLAG_2 : COMPLETE_FLAG
-}
-
 export function IntroTour() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -240,9 +233,6 @@ export function IntroTour() {
         ? 'intro'
         : null
     if (!requestedKind) return
-    const flag = getCompleteFlag(requestedKind)
-    const done = !DEV_TOUR_REPLAY && window.localStorage.getItem(flag) === '1'
-    if (done) return
 
     setBootstrapped(true)
     setTourKind(requestedKind)
@@ -278,13 +268,6 @@ export function IntroTour() {
       const next = stepIndex + 1
       if (next >= STEPS.length) {
         setRun(false)
-        if (tourKind) {
-          try {
-            window.localStorage.setItem(getCompleteFlag(tourKind), '1')
-          } catch {
-            // ignore
-          }
-        }
         return
       }
       const nextStep = STEPS[next]
@@ -355,13 +338,6 @@ export function IntroTour() {
         action === 'close' ||
         action === 'skip'
       ) {
-        if (tourKind) {
-          try {
-            window.localStorage.setItem(getCompleteFlag(tourKind), '1')
-          } catch {
-            // ignore
-          }
-        }
         setRun(false)
         setStepIndex(0)
         inFlight.current = false
@@ -376,13 +352,6 @@ export function IntroTour() {
       if (action === 'next') {
         const next = stepIndex + 1
         if (next >= STEPS.length) {
-          if (tourKind) {
-            try {
-              window.localStorage.setItem(getCompleteFlag(tourKind), '1')
-            } catch {
-              // ignore
-            }
-          }
           setRun(false)
           return
         }
