@@ -114,17 +114,17 @@ const STEPS_INTRO_2: TourStep[] = [
     route: '/controls',
     title: 'Run the ACT+PPO eval',
     content:
-      "Click Next and the tour will run the ACT+PPO eval — it should succeed and auto-end (~10s). Then we'll go look at the new episode.",
-    auto: { kind: 'run-act-ppo-eval', maxWaitMs: 10000, settleMs: 1500 },
+      "Click Next and the tour will run the ACT+PPO eval — it usually succeeds in a few seconds (the policy is ~98%). Tour will wait up to ~20s for the eval to finish, then move to the new episode.",
+    auto: { kind: 'run-act-ppo-eval', maxWaitMs: 22000, settleMs: 1500 },
     placement: 'top',
     skipBeacon: true,
   },
   {
     target: `[data-tour-manifest="${ACT_PPO_MANIFEST_NAME}"]`,
     route: '/datasets',
-    title: 'New episode, success this time',
+    title: 'New episode, with lineage',
     content:
-      "The ACT+PPO eval landed as a new episode under its own manifest, with lineage to the ACT+PPO training run. You now have two evals side by side — same task, different architecture.",
+      "The ACT+PPO eval landed as a new episode under its own manifest, with lineage to the ACT+PPO training run. You now have two evals side by side — same task, different architecture. (ACT+PPO is ~98% success — if this run happened to fail, refresh the URL to re-roll.)",
     placement: 'right',
     skipBeacon: true,
   },
