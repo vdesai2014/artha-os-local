@@ -43,12 +43,12 @@ interface TourStep {
 const STEPS_INTRO_1: TourStep[] = [
   {
     target: '[data-tour="manifest-name"]',
-    route: { kind: 'manifest-detail', manifestName: IL_MANIFEST_NAME },
+    route: '/controls',
     title: 'Eval manifest, set by the agent',
     content:
       "This is the eval manifest the agent created via NATS during prep — name, type, source run, source checkpoint were all set without you typing anything. The agent can update this from the terminal as you iterate, so new policies get tracked under the right manifest automatically.",
     skipBeacon: true,
-    placement: 'bottom',
+    placement: 'left',
   },
   {
     target: '[data-tour="start-eval"]',

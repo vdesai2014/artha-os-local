@@ -575,7 +575,7 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
               <h3>Dataset</h3>
               <span className={`coupon-type-tag coupon-type-${manifest.type}`}>{manifest.type}</span>
             </div>
-            <div className="coupon-metadata-name" data-tour="manifest-name">{manifest.name}</div>
+            <div className="coupon-metadata-name">{manifest.name}</div>
             <div className="coupon-meta-row">
               <span>UUID</span>
               <span className="coupon-meta-uuid">

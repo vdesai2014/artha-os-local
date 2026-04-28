@@ -144,7 +144,7 @@ export function ControlsPage() {
             <p className="eyebrow">Eval</p>
             <span className={evalTagClass} data-tour="eval-state">{evalState.toUpperCase()}</span>
           </div>
-          <div className="sim-controls-header-meta" title={manifestLine}>{manifestLine}</div>
+          <div className="sim-controls-header-meta" title={manifestLine} data-tour="manifest-name">{manifestLine}</div>
           <div className="sim-controls-header-meta" title={policyLine}>
             {policyLine}
             <span className="sim-controls-header-separator">·</span>
