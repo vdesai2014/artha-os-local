@@ -11,10 +11,14 @@ page.
 
 ## No re-narration
 
-The user just finished the ACT+PPO eval; this stage is a small
-REST-API bookkeeping step, not user-facing. Surface a short
-progress marker ("ACT+PPO eval manifest linked to ACT+PPO run")
-and any failure. Do NOT re-explain why.
+The user just finished the ACT+PPO eval and saw two episodes on
+the Datasets page. This stage is a small REST-API bookkeeping
+step that closes the same lineage loop the agent did in Stage 03
+for the IL run — only this time for ACT+PPO. Surface a one-line
+progress marker ("ACT+PPO eval manifest linked as output of
+ACT+PPO run") and any failure. Do NOT re-explain why or
+re-introduce the lineage concept; the user already saw it on the
+Datasets page.
 
 ## Auto-flow note
 
