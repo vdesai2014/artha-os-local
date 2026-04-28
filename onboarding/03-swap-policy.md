@@ -2,21 +2,28 @@
 
 ## Goal
 
-Attach the IL eval manifest as an output of the IL run (so it
-travels with the run if the user later pushes the project to
-artha.bot). Then swap `imitation_learning_inference` for
-`act_ppo_inference` in `services.yaml`, register a new eval
-provenance manifest for the ACT+PPO checkpoint, and restart the
-runtime so the next eval runs the better policy.
+Attach the IL eval manifest as an output of the IL run, then swap
+inference to the ACT+PPO checkpoint, register the new eval
+provenance, and restart the runtime. After this stage, the user
+will re-run the eval manually (no tour) and see the better policy
+succeed.
 
 ## No re-narration
 
-The user knows from Stage 02 that this is the moment we swap to a
-better policy. DO NOT re-explain why we're doing this. Surface
-short progress markers as steps land ("IL eval manifest linked to
-IL run", "services.yaml updated for ACT+PPO", "supervisor
-restarted", "act_ppo inference loaded checkpoint", "provenance
-set"). Surface any failure immediately, in chat.
+The user already knows the demo is a research progression from
+CNN+MLP to ACT+PPO (Stage 02), and just watched the IL baseline
+fail in the in-browser tour. DO NOT re-explain why we're
+swapping.
+
+You may, and should, surface short progress markers as steps land:
+
+- "linked IL eval manifest as output of IL run"
+- "services.yaml updated for ACT+PPO"
+- "supervisor restarted"
+- "ACT+PPO inference loaded checkpoint"
+- "ACT+PPO eval provenance registered"
+
+Surface any failure immediately, in chat.
 
 ## Auto-flow note
 
