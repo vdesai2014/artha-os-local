@@ -422,9 +422,7 @@ artha provenance get
 - `/tmp/artha-grasp-clone.json` exists; `workspace/grasp-pickup__*/`
   exists and contains `runs/` with the trained policies (e.g.,
   `runs/imitation-learning__*` plus the deeper rungs nested
-  inside it). The workspace's top-level `manifests/` and
-  `episodes/` directories exist but are mostly empty until evals
-  actually run.
+  inside it).
 - `core/types.py` has `RobStrideState`, `RobStrideCommand`,
   `CameraFrame`.
 - `services.yaml.pre-demo` exists; `services.yaml` declares

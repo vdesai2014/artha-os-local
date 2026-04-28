@@ -31,7 +31,9 @@ underneath are the product.
   cloud sync. Those primitives plus a coding agent are what make
   robot-learning research fast for any robot — real or simulated.
 
-- **Three on-ramps from here:**
+- **If you want to keep building, here's what the tool offers
+  from here.** No pressure — the demo is done and you're free to
+  poke around or close the tab. But if anything below sounds fun:
   1. **Push to artha.bot.** Create an account, grab a token,
      `artha push` — your eval data and lineage go up to your
      cloud project, ready for collaborators or GPU training.
@@ -42,11 +44,14 @@ underneath are the product.
   3. **Branch a new experiment.** Take any rung of the
      architectural ladder and iterate from there.
 
-After narrating, ask the user which path they want. Stay in the
-conversation. Once they pick, you are no longer following this
-onboarding flow — you are operating as their general-purpose
-agent in the artha-os checkout, governed by `AGENTS.md` and the
-project's own rules.
+After narrating, let the user know the staged onboarding is done
+and you (the agent) are around if they want to dig into any of
+the directions above or ask questions. DO NOT pressure them to
+pick a path. If they say they're done, that's a fine outcome —
+acknowledge and stop. Once they engage on a specific direction,
+you are no longer following this onboarding flow — you are
+operating as their general-purpose agent in the artha-os
+checkout, governed by `AGENTS.md` and the project's own rules.
 
 ## Mandatory checklist — before closing the stage
 
@@ -60,9 +65,12 @@ words.
        product is the underlying primitives (iceoryx2, NATS,
        supervisor, local file store, push/pull/clone) + the
        coding agent.
-- [ ] Offered all three next-step paths (push, wire own robot,
-       branch new experiment), one sentence each.
-- [ ] Asked the user which path they want.
+- [ ] Offered all three directions (push, wire own robot, branch
+       new experiment), one sentence each, framed as optional —
+       not a forced choice.
+- [ ] Made clear the staged onboarding is complete and the agent
+       is available if the user wants to dig in further. Did NOT
+       pressure them to pick a path.
 
 If any item is unchecked, narrate the missing item now.
 
