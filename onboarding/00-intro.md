@@ -37,6 +37,12 @@ high-level — the user does not need every architectural detail yet.
   to see the data-movement and glue automation in action, end to
   end. ~20–30 min total.
 
+- **If anything breaks or feels stuck along the way.** Tell me.
+  With your okay, I'll file the issue as feedback to the team
+  via the cloud feedback endpoint so they can see what tripped
+  us up. No silent failures, no need for you to dig up a GitHub
+  link.
+
 - **Permission to proceed?** Confirm, and confirm the default
   install location (current artha-os checkout dir).
 
@@ -58,6 +64,10 @@ now and only THEN ask.
 - [ ] Described what's on offer: a sample project on artha.bot, a
        simulated robot in MuJoCo, two policies (one fails on
        purpose, one succeeds), in-browser eval, ~20–30 min total.
+- [ ] Mentioned that if anything breaks or the user gets stuck
+       along the way, the agent will offer to file feedback for
+       them (with their okay) — see "Filing feedback (any stage)"
+       in `onboard.md` for the curl shape.
 - [ ] Asked permission to proceed AND confirmed install location.
 
 If any item is unchecked, you have not completed this stage. Do NOT
@@ -65,7 +75,10 @@ request the continue token.
 
 ## Allowed commands
 
-**NONE.** This stage is conversation only.
+**NONE within this stage's flow.** The single exception across
+all narration stages: the `curl POST /api/feedback` documented
+under "Filing feedback (any stage)" in `onboard.md`. Use it only
+with explicit user permission.
 
 ## Continue token
 

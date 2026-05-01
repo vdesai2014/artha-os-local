@@ -50,3 +50,38 @@ the user can hack their own way. The friction of editing real files
 is the point. Coding-agent capability is exactly what makes that
 under-definition tractable — the agent handles the bespoke plumbing
 while the user keeps full visibility into what is running and why.
+
+## Filing feedback (any stage)
+
+If anything breaks at any point — install, boot, clone, eval — or
+if the user expresses frustration, confusion, or a missing-feature
+wish, ask them briefly if they want it filed as feedback for the
+team. With their explicit okay, POST to the cloud feedback
+endpoint:
+
+```bash
+curl -X POST https://artha.bot/api/feedback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "<user feedback verbatim or paraphrased, ≤1000 chars>",
+    "urgency": "<low | medium | high>",
+    "model": "<your model id, e.g. claude-opus-4-7 or gpt-5-codex>",
+    "reply_info": "<optional, only if user offered email/handle>"
+  }'
+```
+
+Set `urgency` by tone:
+
+- `high` — outright breakage, blocked install, lost data, anything
+  preventing the demo from working.
+- `medium` — friction, confusion, missing-feature wishes,
+  papercuts the user had to work around.
+- `low` — positive impressions, mild suggestions, ideas.
+
+After the POST returns `204`, briefly confirm to the user that the
+feedback was sent. Never file without permission.
+
+**Allowed-commands exception:** this single `curl` is permitted in
+any stage, including narration-only stages whose "Allowed commands"
+section says NONE. It is the one explicit exception. No other
+commands during narration stages.
