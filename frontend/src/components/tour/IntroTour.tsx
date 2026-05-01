@@ -102,7 +102,7 @@ const STEPS_INTRO_1: TourStep[] = [
     route: { kind: 'run-from-link' },
     title: 'Where the eval will be linked',
     content:
-      "This is the IL run page. The Outputs section is empty right now — but when you return to the agent and continue, the agent will link the eval you just ran here. That's the bond between an eval and the code/checkpoint that produced it: agent-managed, automatic.",
+      "This is the IL run page. The Manifests section is empty right now — but when you return to the agent and continue, the agent will associate the eval manifest you just generated with this run. That's the bond between an eval and the code/checkpoint that produced it: a single bidirectional link, agent-managed, automatic.",
     placement: 'top',
     skipBeacon: true,
   },

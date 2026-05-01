@@ -66,24 +66,17 @@ project_dir = sorted(Path("workspace").glob("grasp-pickup__*"))[-1]
 il_dir = sorted(project_dir.glob("runs/**/imitation-learning__*"))[-1]
 run_id = json.loads((il_dir / "run.json").read_text())["id"]
 
-# Read current links; skip if already linked (idempotent).
-run = json.loads(urllib.request.urlopen(f"{API}/runs/{run_id}").read())
-links = run.get("links") or []
-if not any(L.get("target_id") == manifest["id"] for L in links):
-    links.append({
-        "type": "output",
-        "target_type": "manifest",
-        "target_id": manifest["id"],
-        "label": manifest["name"],
-    })
-    req = urllib.request.Request(
-        f"{API}/runs/{run_id}",
-        method="PATCH",
-        data=json.dumps({"links": links}).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    urllib.request.urlopen(req).read()
-print(f"Linked manifest {manifest['id']} as output of IL run {run_id}")
+# Associate the manifest with the run via the bidirectional junction
+# endpoint. Server-side dedup makes this idempotent — repeating is a
+# no-op.
+req = urllib.request.Request(
+    f"{API}/runs/{run_id}/manifests",
+    method="POST",
+    data=json.dumps({"manifest_id": manifest["id"]}).encode(),
+    headers={"Content-Type": "application/json"},
+)
+urllib.request.urlopen(req).read()
+print(f"Linked manifest {manifest['id']} to IL run {run_id}")
 PY
 
 # 2. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
