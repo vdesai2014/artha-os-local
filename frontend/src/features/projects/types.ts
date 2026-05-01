@@ -29,20 +29,12 @@ export interface RunSummary {
   project_id: string
   parent_id: string | null
   name: string
+  manifest_ids: string[]
   created_at: string
   updated_at: string
 }
 
-export interface RunLink {
-  type: string
-  target_type: string
-  target_id: string
-  path?: string | null
-  label?: string | null
-}
-
 export interface RunDetail extends RunSummary {
-  links: RunLink[]
   has_readme: boolean
   file_count: number
 }
@@ -79,7 +71,7 @@ export interface ProjectSyncResult {
     projects: number
     runs: number
     manifests: number
-    run_links: number
+    run_manifest_links: number
   }
   uploaded: {
     project_files: number
@@ -104,7 +96,6 @@ export interface RunMutationInput {
 export interface RunPatchInput {
   name?: string
   parent_id?: string | null
-  links?: RunLink[]
 }
 
 export interface ManifestSummary {
@@ -122,8 +113,25 @@ export interface ManifestSummary {
   updated_at: string
 }
 
+export interface RunManifestSummary {
+  id: string
+  name: string
+  description: string | null
+  type: string
+  tags: string[]
+  is_public: boolean
+  fps: number | null
+  episode_count: number
+  created_at: string
+  updated_at: string
+}
+
 export interface ManifestListResponse {
   manifests: ManifestSummary[]
   next_cursor: string | null
   total_count: number
+}
+
+export interface RunManifestListResponse {
+  manifests: RunManifestSummary[]
 }

@@ -54,7 +54,7 @@ def _add_push(sp) -> None:
     p = sp.add_parser("push", help="push local entity to cloud")
     p.add_argument("entity_type", choices=("project", "run", "manifest"))
     p.add_argument("entity_id")
-    p.add_argument("--include-links", action="store_true")
+    p.add_argument("--include-manifests", action="store_true")
     p.add_argument("--include-descendants", action="store_true")
 
 
@@ -62,7 +62,7 @@ def _add_pull(sp) -> None:
     p = sp.add_parser("pull", help="pull cloud entity into local store")
     p.add_argument("entity_type", choices=("project", "run", "manifest"))
     p.add_argument("entity_id")
-    p.add_argument("--include-links", action="store_true")
+    p.add_argument("--include-manifests", action="store_true")
     p.add_argument("--include-descendants", action="store_true")
 
 

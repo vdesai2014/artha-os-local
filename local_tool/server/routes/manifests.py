@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from ...ids import validate_id
 from ...io import StoreError
 from ...sync import SyncError, pull_manifest_from_cloud, sync_manifest_to_cloud
-from ...store import manifests
+from ...store import manifests, run_manifests
 from ...store.projects import StoreCtx
 from ..deps import get_ctx
 
@@ -27,7 +27,6 @@ class ManifestCreateBody(BaseModel):
     fps: int | None = None
     encoding: dict = Field(default_factory=dict)
     features: dict = Field(default_factory=dict)
-    associated_runs: list[dict] = Field(default_factory=list)
     success_rate: float | None = None
     rated_episodes: int = 0
 
@@ -46,13 +45,21 @@ class ManifestPatchBody(BaseModel):
     fps: int | None = None
     encoding: dict | None = None
     features: dict | None = None
-    associated_runs: list[dict] | None = None
     success_rate: float | None = None
     rated_episodes: int | None = None
 
 
 class ManifestEpisodeIds(BaseModel):
     episode_ids: list[str]
+
+
+class ManifestRunBody(BaseModel):
+    run_id: str
+
+    @field_validator("run_id")
+    @classmethod
+    def _check_run_id(cls, v: str) -> str:
+        return validate_id("run", v)
 
 
 class ManifestSyncBody(BaseModel):
@@ -101,6 +108,17 @@ def _episode_summary(episode) -> dict:
         "features": episode.features,
         "size_bytes": episode.size_bytes,
         "created_at": episode.created_at,
+    }
+
+
+def _run_link_summary(run) -> dict:
+    return {
+        "id": run.id,
+        "project_id": run.project_id,
+        "parent_id": run.parent_id,
+        "name": run.name,
+        "created_at": run.created_at,
+        "updated_at": run.updated_at,
     }
 
 
@@ -169,6 +187,34 @@ def patch_manifest(manifest_id: str, body: ManifestPatchBody, ctx: StoreCtx = De
 def delete_manifest(manifest_id: str, ctx: StoreCtx = Depends(get_ctx)):
     try:
         manifests.delete_manifest(ctx, manifest_id)
+    except StoreError as e:
+        _raise(e)
+
+
+@router.get("/manifests/{manifest_id}/runs")
+def list_manifest_runs(manifest_id: str, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        return {"runs": [_run_link_summary(run) for run in run_manifests.list_manifest_runs(ctx, manifest_id)]}
+    except StoreError as e:
+        _raise(e)
+
+
+@router.post("/manifests/{manifest_id}/runs", status_code=201)
+def add_manifest_run(manifest_id: str, body: ManifestRunBody, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        return run_manifests.add_run_manifest(ctx, body.run_id, manifest_id)
+    except StoreError as e:
+        _raise(e)
+
+
+@router.delete("/manifests/{manifest_id}/runs/{run_id}", status_code=204)
+def remove_manifest_run(manifest_id: str, run_id: str, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        try:
+            validate_id("run", run_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        run_manifests.remove_run_manifest(ctx, run_id, manifest_id)
     except StoreError as e:
         _raise(e)
 

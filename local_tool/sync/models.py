@@ -15,7 +15,7 @@ class SyncRequest:
     operation: SyncOperation
     entity_type: SyncEntityType
     entity_id: str
-    include_links: bool = False
+    include_manifests: bool = False
     include_descendants: bool = False
     dry_run: bool = False
     cloud_api_base: str | None = None
@@ -154,7 +154,7 @@ class SyncResult:
                 "operation": self.request.operation,
                 "entity_type": self.request.entity_type,
                 "entity_id": self.request.entity_id,
-                "include_links": self.request.include_links,
+                "include_manifests": self.request.include_manifests,
                 "include_descendants": self.request.include_descendants,
                 "dry_run": self.request.dry_run,
             },

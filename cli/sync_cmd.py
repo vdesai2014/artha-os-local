@@ -121,7 +121,7 @@ def run(args) -> int:
             "operation": op,
             "entity_type": args.entity_type,
             "entity_id": args.entity_id,
-            "include_links": bool(args.include_links),
+            "include_manifests": bool(args.include_manifests),
             "include_descendants": bool(args.include_descendants),
         }
         if not quiet:

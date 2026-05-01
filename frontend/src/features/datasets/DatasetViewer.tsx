@@ -6,6 +6,7 @@ import {
   fetchDatasetEpisodeDetail,
   fetchDatasetEpisodesPage,
   fetchDatasetManifest,
+  fetchDatasetManifestRuns,
   getEpisodeCameraList,
   getParquetUrl,
   patchEpisode,
@@ -17,6 +18,7 @@ import type {
   DatasetEpisodeDetail,
   DatasetEpisodePage,
   DatasetManifestDetail,
+  DatasetManifestRunSummary,
   ParsedEpisodeData,
 } from './types'
 
@@ -101,6 +103,61 @@ function CopyIdButton({ value }: { value: string }) {
   )
 }
 
+function LinkedRunsCarousel({
+  runs,
+  activeIndex,
+  onPrevious,
+  onNext,
+}: {
+  runs: DatasetManifestRunSummary[]
+  activeIndex: number
+  onPrevious: () => void
+  onNext: () => void
+}) {
+  const boundedIndex = runs.length > 0 ? Math.min(activeIndex, runs.length - 1) : 0
+  const activeRun = runs[boundedIndex] ?? null
+  if (!activeRun) return null
+
+  const hasMultiple = runs.length > 1
+  return (
+    <section className="coupon-linked-runs" aria-label="Linked runs">
+      <button
+        type="button"
+        className="coupon-linked-run-nav"
+        onClick={onPrevious}
+        disabled={!hasMultiple}
+        aria-label="Previous linked run"
+        title="Previous linked run"
+      >
+        ‹
+      </button>
+      <Link
+        className="coupon-linked-run-card"
+        to={`/projects/${activeRun.project_id}/runs/${activeRun.id}`}
+        title={activeRun.id}
+      >
+        <span className="coupon-linked-run-kicker">
+          Linked run {boundedIndex + 1}/{runs.length}
+        </span>
+        <strong>{activeRun.name}</strong>
+        <span className="coupon-linked-run-meta">
+          <code>{activeRun.id.slice(0, 8)}</code>
+          <span title={activeRun.project_id}>{activeRun.project_id}</span>
+        </span>
+      </Link>
+      <button
+        type="button"
+        className="coupon-linked-run-nav"
+        onClick={onNext}
+        disabled={!hasMultiple}
+        aria-label="Next linked run"
+        title="Next linked run"
+      >
+        ›
+      </button>
+    </section>
+  )
+}
 
 interface DatasetViewerProps {
   manifestId: string
@@ -119,6 +176,9 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
   )
 
   const [manifest, setManifest] = useState<DatasetManifestDetail | null>(null)
+  const [linkedRuns, setLinkedRuns] = useState<DatasetManifestRunSummary[]>([])
+  const [linkedRunsError, setLinkedRunsError] = useState<string | null>(null)
+  const [activeLinkedRunIndex, setActiveLinkedRunIndex] = useState(0)
   const [pages, setPages] = useState<LoadedEpisodePage[]>([])
   const [pageIndex, setPageIndex] = useState(0)
   const [pageSize, setPageSize] = useState(initialStored.pageSize)
@@ -173,12 +233,25 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
       setError(null)
       setPages([])
       setPageIndex(0)
+      setLinkedRuns([])
+      setLinkedRunsError(null)
+      setActiveLinkedRunIndex(0)
       setSelectedEpisode(null)
       setParsedData(null)
       try {
-        const manifestDetail = await fetchDatasetManifest(manifestId)
+        const [manifestDetail, manifestRuns] = await Promise.all([
+          fetchDatasetManifest(manifestId),
+          fetchDatasetManifestRuns(manifestId)
+            .then((response) => ({ runs: response.runs, error: null as string | null }))
+            .catch((runError) => ({
+              runs: [],
+              error: (runError as Error).message || 'Linked run metadata is not available locally.',
+            })),
+        ])
         if (cancelled) return
         setManifest(manifestDetail)
+        setLinkedRuns(manifestRuns.runs)
+        setLinkedRunsError(manifestRuns.error)
 
         const firstPage = await fetchDatasetEpisodesPage(manifestId, pageSize, null)
         if (cancelled) return
@@ -258,6 +331,13 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
   }, [currentPage, loadingEpisode, manifestId, selectedEpisodeId])
 
   useEffect(() => {
+    setActiveLinkedRunIndex((current) => {
+      if (linkedRuns.length === 0) return 0
+      return Math.min(current, linkedRuns.length - 1)
+    })
+  }, [linkedRuns.length])
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setExpandedCamera(null)
     }
@@ -335,6 +415,18 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
     setPageIndex((current) => Math.max(0, current - 1))
   }
 
+  function goPreviousLinkedRun() {
+    setActiveLinkedRunIndex((current) => (
+      linkedRuns.length ? (current - 1 + linkedRuns.length) % linkedRuns.length : 0
+    ))
+  }
+
+  function goNextLinkedRun() {
+    setActiveLinkedRunIndex((current) => (
+      linkedRuns.length ? (current + 1) % linkedRuns.length : 0
+    ))
+  }
+
   const rateEpisode = useCallback(
     async (episodeId: string, current: number | null, value: number) => {
       const next = current === value ? null : value
@@ -373,13 +465,15 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
 
   return (
     <div className={`coupon-shell${compact ? ' coupon-shell-compact' : ''}`}>
-      <header className="coupon-hero">
-        <div>
-          {manifest.description ? (
-            <p className="project-hero-copy">{manifest.description}</p>
-          ) : null}
-        </div>
-      </header>
+      {!compact ? (
+        <header className="coupon-hero">
+          <div>
+            {manifest.description ? (
+              <p className="project-hero-copy">{manifest.description}</p>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
 
       <div className={`coupon-layout${compact ? ' coupon-layout-compact' : ''}`}>
         <aside className="coupon-episode-panel">
@@ -595,6 +689,18 @@ export function DatasetViewer({ manifestId, compact = false }: DatasetViewerProp
                 success · {manifest.rated_episodes}/{manifest.episode_count} rated
               </span>
             </div>
+            <LinkedRunsCarousel
+              runs={linkedRuns}
+              activeIndex={activeLinkedRunIndex}
+              onPrevious={goPreviousLinkedRun}
+              onNext={goNextLinkedRun}
+            />
+            {linkedRunsError && manifest.run_ids.length > 0 ? (
+              <div className="coupon-linked-run-error">
+                <strong>Linked runs unavailable locally</strong>
+                <span>{manifest.run_ids.join(', ')}</span>
+              </div>
+            ) : null}
             {manifest.description ? (
               <p className="coupon-metadata-desc">{manifest.description}</p>
             ) : null}

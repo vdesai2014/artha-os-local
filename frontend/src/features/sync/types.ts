@@ -5,7 +5,7 @@ export interface SyncJobRequest {
   operation: SyncOperation
   entity_type: SyncEntityType
   entity_id: string
-  include_links?: boolean
+  include_manifests?: boolean
   include_descendants?: boolean
 }
 
@@ -50,7 +50,7 @@ export interface SyncJobPayload {
       metadata_done: number
       files_done: number
       bytes_done: number
-      links_done: number
+      associations_done: number
     }
   }
   result: Record<string, unknown> | null

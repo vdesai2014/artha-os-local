@@ -302,8 +302,14 @@ Note: `files` omitted from list. `next_cursor` is `null` when no more results.
 {
   "name?": "string",
   "description?": "string",
+  "type?": "teleop|eval|intervention|synthetic",
   "tags?": ["string"],
-  "is_public?": true
+  "is_public?": true,
+  "fps?": 30,
+  "encoding?": {},
+  "features?": {},
+  "success_rate?": 0.75,
+  "rated_episodes?": 20
 }
 ```
 
@@ -454,7 +460,7 @@ If `parent_id` is provided, tree invariants are enforced: parent must be in the 
   "project_id": "proj_...",
   "parent_id": null,
   "name": "train-v1",
-  "links": [],
+  "manifest_ids": [],
   "files": {},
   "created_at": "2026-03-22T10:00:00Z",
   "updated_at": "2026-03-22T10:00:00Z"
@@ -483,6 +489,7 @@ If `parent_id` is provided, tree invariants are enforced: parent must be in the 
       "project_id": "proj_...",
       "parent_id": null,
       "name": "train-v1",
+      "manifest_ids": ["mf_..."],
       "created_at": "2026-03-22T10:00:00Z",
       "updated_at": "2026-03-22T12:00:00Z"
     }
@@ -491,7 +498,7 @@ If `parent_id` is provided, tree invariants are enforced: parent must be in the 
 }
 ```
 
-Note: `files` and `links` omitted from list.
+Note: `files` omitted from list. `manifest_ids` is included.
 
 ### GET /api/runs/{id}
 
@@ -513,14 +520,62 @@ If `parent_id` is changed, tree invariants are enforced: same project, no self-p
 ```json
 {
   "name?": "string",
-  "parent_id?": "string",
-  "links?": [
-    {"type": "string", "target_type": "manifest", "target_id": "string"}
-  ]
+  "parent_id?": "string"
 }
 ```
 
 **Response `200`:** Updated run object.
+
+### GET /api/runs/{id}/manifests
+
+**Auth:** Read (inherits from project)
+
+**Response `200`:**
+```json
+{
+  "manifests": [
+    {
+      "id": "mf_...",
+      "owner_user_id": "user_2x...",
+      "owner_username": "alice",
+      "name": "teleop-folding-v1",
+      "description": "Teleoperated cloth folding demos",
+      "type": "teleop",
+      "tags": ["cloth", "folding"],
+      "is_public": false,
+      "fps": 30,
+      "episode_count": 150,
+      "created_at": "2026-03-22T10:00:00Z",
+      "updated_at": "2026-03-22T10:00:00Z"
+    }
+  ]
+}
+```
+
+### POST /api/runs/{id}/manifests
+
+**Auth:** Write access to run project and manifest
+
+**Request:**
+```json
+{
+  "manifest_id": "mf_..."
+}
+```
+
+**Response `201`:**
+```json
+{
+  "run_id": "run_...",
+  "manifest_id": "mf_..."
+}
+```
+
+### DELETE /api/runs/{id}/manifests/{manifest_id}
+
+**Auth:** Write access to run project and manifest
+
+**Response:** `204 No Content`
 
 ### DELETE /api/runs/{id}
 
@@ -588,7 +643,8 @@ Same request/response as `POST /api/projects/{id}/files/delete`.
   "features?": {
     "<key>": {"dtype": "string", "shape": [0]}
   },
-  "source_run_id?": "string"
+  "success_rate?": 0.75,
+  "rated_episodes?": 20
 }
 ```
 
@@ -607,7 +663,9 @@ Same request/response as `POST /api/projects/{id}/files/delete`.
   "features": {
     "observation.images.overhead": {"dtype": "video", "shape": [480, 640, 3]}
   },
-  "source_run_id": "run_...",
+  "run_ids": [],
+  "success_rate": 0.75,
+  "rated_episodes": 20,
   "episode_count": 0,
   "created_at": "2026-03-22T10:00:00Z",
   "updated_at": "2026-03-22T10:00:00Z"
@@ -643,12 +701,16 @@ Scope semantics:
     {
       "id": "mf_...",
       "owner_user_id": "user_2x...",
+      "owner_username": "alice",
       "name": "teleop-folding-v1",
       "description": "Teleoperated cloth folding demos",
       "type": "teleop",
       "tags": ["cloth", "folding"],
       "is_public": true,
       "fps": 30,
+      "run_ids": ["run_..."],
+      "success_rate": 0.75,
+      "rated_episodes": 20,
       "episode_count": 150,
       "created_at": "2026-03-22T10:00:00Z",
       "updated_at": "2026-03-22T10:00:00Z"
@@ -658,7 +720,7 @@ Scope semantics:
 }
 ```
 
-Note: `features`, `encoding`, `source_run_id` omitted from list.
+Note: `features` and `encoding` omitted from list. `run_ids` is included.
 
 ### GET /api/manifests/{id}
 
@@ -691,6 +753,51 @@ Note: `features`, `encoding`, `source_run_id` omitted from list.
 **Auth:** Owner
 
 **Path params:** `id` — manifest ID
+
+**Response:** `204 No Content`
+
+### GET /api/manifests/{id}/runs
+
+**Auth:** Read (owner, member, or public)
+
+**Response `200`:**
+```json
+{
+  "runs": [
+    {
+      "id": "run_...",
+      "project_id": "proj_...",
+      "parent_id": null,
+      "name": "train-v1",
+      "created_at": "2026-03-22T10:00:00Z",
+      "updated_at": "2026-03-22T12:00:00Z"
+    }
+  ]
+}
+```
+
+### POST /api/manifests/{id}/runs
+
+**Auth:** Write access to manifest and run project
+
+**Request:**
+```json
+{
+  "run_id": "run_..."
+}
+```
+
+**Response `201`:**
+```json
+{
+  "run_id": "run_...",
+  "manifest_id": "mf_..."
+}
+```
+
+### DELETE /api/manifests/{id}/runs/{run_id}
+
+**Auth:** Write access to manifest and run project
 
 **Response:** `204 No Content`
 

@@ -5,6 +5,7 @@ import type {
   DatasetEpisodePage,
   DatasetEpisodeSummary,
   DatasetManifestDetail,
+  DatasetManifestRunListResponse,
 } from './types'
 
 type TokenGetter = (() => Promise<string | null>) | undefined
@@ -32,6 +33,16 @@ export async function fetchDatasetManifest(manifestId: string, getToken?: TokenG
     throw new Error(response.status === 403 ? 'Private manifest' : `Manifest load failed with ${response.status}`)
   }
   return response.json() as Promise<DatasetManifestDetail>
+}
+
+export async function fetchDatasetManifestRuns(manifestId: string, getToken?: TokenGetter) {
+  const response = await fetch(`${env.apiBase}/api/manifests/${manifestId}/runs`, {
+    headers: await buildAuthHeaders(getToken),
+  })
+  if (!response.ok) {
+    throw new Error(`Manifest run links failed with ${response.status}`)
+  }
+  return response.json() as Promise<DatasetManifestRunListResponse>
 }
 
 export async function fetchDatasetEpisodesPage(

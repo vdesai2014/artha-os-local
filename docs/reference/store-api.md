@@ -34,7 +34,10 @@ file is a grep-friendly index — design intent lives in
 | POST   | `/api/projects/{project_id}/runs` | create a run under a project |
 | GET    | `/api/projects/{project_id}/runs` | list runs (full tree, flat) |
 | GET    | `/api/runs/{id}` | fetch run detail |
-| PATCH  | `/api/runs/{id}` | edit name / parent_id / links |
+| PATCH  | `/api/runs/{id}` | edit name / parent_id |
+| GET    | `/api/runs/{id}/manifests` | list manifests linked to a run |
+| POST   | `/api/runs/{id}/manifests` | link a manifest to a run |
+| DELETE | `/api/runs/{id}/manifests/{manifest_id}` | unlink a manifest from a run |
 | DELETE | `/api/runs/{id}` | delete run + descendants |
 | GET    | `/api/runs/{id}/files` | list run-level files |
 | POST   | `/api/runs/{id}/files/download` | resolve download URLs for given paths |
@@ -53,6 +56,9 @@ file is a grep-friendly index — design intent lives in
 | GET    | `/api/manifests/{id}` | fetch manifest detail |
 | PATCH  | `/api/manifests/{id}` | edit mutable fields |
 | DELETE | `/api/manifests/{id}` | delete manifest (episodes stay) |
+| GET    | `/api/manifests/{id}/runs` | list runs linked to a manifest |
+| POST   | `/api/manifests/{id}/runs` | link a run to a manifest |
+| DELETE | `/api/manifests/{id}/runs/{run_id}` | unlink a run from a manifest |
 | POST   | `/api/manifests/{id}/episodes/add` | attach episodes to manifest |
 | POST   | `/api/manifests/{id}/episodes/remove` | detach episodes |
 | GET    | `/api/manifests/{id}/episodes` | list episodes in manifest |
@@ -78,7 +84,7 @@ file is a grep-friendly index — design intent lives in
 | GET    | `/api/sync/jobs/{job_id}` | read one sync progress file |
 
 Body fields: `operation` (`push`/`pull`/`clone`), `entity_type`
-(`project`/`run`/`manifest`), `entity_id`, `include_links?`,
+(`project`/`run`/`manifest`), `entity_id`, `include_manifests?`,
 `include_descendants?`, `cloud_api_base?`, `bearer_token?`. Blocking
 `/api/sync/execute` also accepts `progress: true` to write a progress file.
 

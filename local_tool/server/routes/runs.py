@@ -4,12 +4,12 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
 
 from ...ids import validate_id
 from ...io import StoreError
 from ...sync import SyncError, pull_run_from_cloud, sync_run_to_cloud
-from ...store import runs
+from ...store import run_manifests, runs
 from ...store.projects import StoreCtx
 from ..deps import get_ctx
 
@@ -32,32 +32,18 @@ class RunCreateBody(BaseModel):
         return validate_id("run", v) if v is not None else None
 
 
-class RunLinkBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    type: str
-    target_type: str
-    target_id: str
-    path: str | None = None
-    label: str | None = None
-
-    @field_validator("target_type")
-    @classmethod
-    def _check_target_type(cls, v: str) -> str:
-        if v != "manifest":
-            raise ValueError("target_type must be manifest")
-        return v
-
-    @field_validator("target_id")
-    @classmethod
-    def _check_target_id(cls, v: str) -> str:
-        return validate_id("manifest", v)
-
-
 class RunPatchBody(BaseModel):
     name: str | None = None
     parent_id: str | None = None
-    links: list[RunLinkBody] | None = None
+
+
+class RunManifestBody(BaseModel):
+    manifest_id: str
+
+    @field_validator("manifest_id")
+    @classmethod
+    def _check_manifest_id(cls, v: str) -> str:
+        return validate_id("manifest", v)
 
 
 class ReadmeBody(BaseModel):
@@ -69,7 +55,7 @@ class FileDownloadBody(BaseModel):
 
 
 class RunSyncBody(BaseModel):
-    include_links: bool = False
+    include_manifests: bool = False
     include_descendants: bool = False
     cloud_api_base: str | None = None
     bearer_token: str | None = None
@@ -83,6 +69,21 @@ def _raise(e: StoreError):
 def _run_summary(run) -> dict:
     return {
         **run.model_dump(),
+    }
+
+
+def _manifest_link_summary(manifest) -> dict:
+    return {
+        "id": manifest.id,
+        "name": manifest.name,
+        "description": manifest.description,
+        "type": manifest.type,
+        "tags": manifest.tags,
+        "is_public": manifest.is_public,
+        "fps": manifest.fps,
+        "episode_count": len(manifest.episode_ids),
+        "created_at": manifest.created_at,
+        "updated_at": manifest.updated_at,
     }
 
 
@@ -138,6 +139,34 @@ def patch_run(run_id: str, body: RunPatchBody, ctx: StoreCtx = Depends(get_ctx))
             "has_readme": runs.run_has_readme(ctx, run_id),
             "file_count": runs.run_file_count(ctx, run_id),
         }
+    except StoreError as e:
+        _raise(e)
+
+
+@router.get("/runs/{run_id}/manifests")
+def list_run_manifests(run_id: str, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        return {"manifests": [_manifest_link_summary(manifest) for manifest in run_manifests.list_run_manifests(ctx, run_id)]}
+    except StoreError as e:
+        _raise(e)
+
+
+@router.post("/runs/{run_id}/manifests", status_code=201)
+def add_run_manifest(run_id: str, body: RunManifestBody, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        return run_manifests.add_run_manifest(ctx, run_id, body.manifest_id)
+    except StoreError as e:
+        _raise(e)
+
+
+@router.delete("/runs/{run_id}/manifests/{manifest_id}", status_code=204)
+def remove_run_manifest(run_id: str, manifest_id: str, ctx: StoreCtx = Depends(get_ctx)):
+    try:
+        try:
+            validate_id("manifest", manifest_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        run_manifests.remove_run_manifest(ctx, run_id, manifest_id)
     except StoreError as e:
         _raise(e)
 
@@ -201,7 +230,7 @@ def sync_run(run_id: str, body: RunSyncBody | None = None, ctx: StoreCtx = Depen
         return sync_run_to_cloud(
             ctx,
             run_id,
-            include_links=body.include_links if body else False,
+            include_manifests=body.include_manifests if body else False,
             include_descendants=body.include_descendants if body else False,
             cloud_api_base=body.cloud_api_base if body else None,
             bearer_token=body.bearer_token if body else None,
@@ -218,7 +247,7 @@ def pull_run(run_id: str, body: RunSyncBody | None = None, ctx: StoreCtx = Depen
         return pull_run_from_cloud(
             ctx,
             run_id,
-            include_links=body.include_links if body else False,
+            include_manifests=body.include_manifests if body else False,
             include_descendants=body.include_descendants if body else False,
             cloud_api_base=body.cloud_api_base if body else None,
             bearer_token=body.bearer_token if body else None,

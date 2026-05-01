@@ -8,9 +8,20 @@ import { FilesPanel } from '../components/FilesPanel'
 import { ManifestLinkPickerModal } from '../components/ManifestLinkPickerModal'
 import { MarkdownReadmeEditor } from '../components/MarkdownReadmeEditor'
 import { ManifestViewerModal } from '../components/ManifestViewerModal'
-import { downloadRunFiles, getProject, getRun, getRunReadme, listManifests, listRunFiles, listRuns, updateRun } from '../api'
+import {
+  addRunManifest,
+  downloadRunFiles,
+  getProject,
+  getRun,
+  getRunReadme,
+  listManifests,
+  listRunFiles,
+  listRunManifests,
+  listRuns,
+  removeRunManifest,
+} from '../api'
 import { saveRunReadme } from '../runReadmeSync'
-import type { FileListEntry, ManifestSummary, ProjectDetail, RunDetail, RunLink, RunSummary } from '../types'
+import type { FileListEntry, ManifestSummary, ProjectDetail, RunDetail, RunManifestSummary, RunSummary } from '../types'
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-US', {
@@ -20,39 +31,35 @@ function formatDate(value: string) {
   })
 }
 
-function classifyLinkBucket(link: RunLink) {
-  return ['input_data', 'input_model', 'input_code'].includes(link.type) ? 'inputs' : 'outputs'
-}
-
-function LinkCard({
-  link,
+function ManifestAssociationCard({
+  manifest,
   canRemove,
   onClick,
   onRemove,
 }: {
-  link: RunLink
+  manifest: RunManifestSummary
   canRemove: boolean
-  onClick?: (link: RunLink) => void
-  onRemove?: (link: RunLink) => void
+  onClick?: (manifest: RunManifestSummary) => void
+  onRemove?: (manifest: RunManifestSummary) => void
 }) {
   return (
     <div className="run-link-card">
       <div className="run-link-card-head">
-        <button type="button" className="run-link-card-main" onClick={() => onClick?.(link)}>
+        <button type="button" className="run-link-card-main" onClick={() => onClick?.(manifest)}>
           <div className="run-link-card-top">
-            <span>{link.type.replace(/_/g, ' ')}</span>
-            <code>{link.target_type}</code>
+            <span>{manifest.type}</span>
+            <code>{manifest.episode_count} episodes</code>
           </div>
-          <strong>{link.label || link.target_id}</strong>
-          <span>{link.target_id}</span>
-          {link.path ? <small>{link.path}</small> : null}
+          <strong>{manifest.name}</strong>
+          <span>{manifest.id}</span>
+          {manifest.description ? <small>{manifest.description}</small> : null}
         </button>
         {canRemove ? (
           <button
             type="button"
             className="run-link-remove"
-            aria-label="Remove link"
-            onClick={() => onRemove?.(link)}
+            aria-label="Remove manifest association"
+            onClick={() => onRemove?.(manifest)}
           >
             ×
           </button>
@@ -62,49 +69,47 @@ function LinkCard({
   )
 }
 
-function RunLinksPanel({
-  title,
-  links,
+function RunManifestsPanel({
+  manifests,
   canAdd,
   canRemove,
   onAdd,
-  onLinkClick,
-  onRemoveLink,
+  onManifestClick,
+  onRemoveManifest,
   dataTour,
 }: {
-  title: string
-  links: RunLink[]
+  manifests: RunManifestSummary[]
   canAdd: boolean
   canRemove: boolean
   onAdd: () => void
-  onLinkClick: (link: RunLink) => void
-  onRemoveLink: (link: RunLink) => void
+  onManifestClick: (manifest: RunManifestSummary) => void
+  onRemoveManifest: (manifest: RunManifestSummary) => void
   dataTour?: string
 }) {
   return (
     <section className="run-detail-card run-links-panel" data-tour={dataTour}>
       <div className="run-detail-card-header">
-        <span>{title}</span>
+        <span>Manifests</span>
         <span className="run-detail-card-header-actions">
-          <span>{links.length}</span>
+          <span>{manifests.length}</span>
           {canAdd ? (
             <button type="button" className="project-inline-action" onClick={onAdd}>
-              + link
+              + manifest
             </button>
           ) : null}
         </span>
       </div>
-      {links.length === 0 ? (
-        <p className="project-detail-empty">No {title.toLowerCase()} linked yet.</p>
+      {manifests.length === 0 ? (
+        <p className="project-detail-empty">No manifests associated yet.</p>
       ) : (
         <div className="run-links-grid">
-          {links.map((link, index) => (
-            <LinkCard
-              key={`${link.target_id}-${index}`}
-              link={link}
+          {manifests.map((manifest) => (
+            <ManifestAssociationCard
+              key={manifest.id}
+              manifest={manifest}
               canRemove={canRemove}
-              onClick={onLinkClick}
-              onRemove={onRemoveLink}
+              onClick={onManifestClick}
+              onRemove={onRemoveManifest}
             />
           ))}
         </div>
@@ -123,6 +128,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   const [files, setFiles] = useState<Record<string, FileListEntry>>({})
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [manifests, setManifests] = useState<ManifestSummary[]>([])
+  const [associatedManifests, setAssociatedManifests] = useState<RunManifestSummary[]>([])
   const [manifestPickerScope, setManifestPickerScope] = useState<'all' | 'shared'>('all')
   const [readme, setReadme] = useState('')
   const [savedReadme, setSavedReadme] = useState('')
@@ -130,7 +136,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   const [readmeState, setReadmeState] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [linkingBucket, setLinkingBucket] = useState<'inputs' | 'outputs' | null>(null)
+  const [linkingManifest, setLinkingManifest] = useState(false)
   const [selectedManifestId, setSelectedManifestId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -146,17 +152,19 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
     setError(null)
 
     try {
-      const [projectResponse, runResponse, filesResponse, runsResponse] = await Promise.all([
+      const [projectResponse, runResponse, filesResponse, runsResponse, runManifestsResponse] = await Promise.all([
         getProject(projectId, getToken),
         getRun(runId, getToken),
         listRunFiles(runId, getToken),
         listRuns(projectId, getToken),
+        listRunManifests(runId, getToken),
       ])
 
       setProject(projectResponse)
       setRun(runResponse)
       setFiles(filesResponse.files)
       setRuns(runsResponse.runs)
+      setAssociatedManifests(runManifestsResponse.manifests)
 
       if (runResponse.has_readme) {
         setReadmeState('loading')
@@ -188,7 +196,7 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   }, [loadRunPage])
 
   useEffect(() => {
-    setLinkingBucket(null)
+    setLinkingManifest(false)
     setSelectedManifestId(null)
   }, [projectId, runId])
 
@@ -218,50 +226,39 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
   const readmeDirty = useMemo(() => readme !== savedReadme, [readme, savedReadme])
   const parentRun = useMemo(() => runs.find((entry) => entry.id === run?.parent_id) ?? null, [runs, run?.parent_id])
   const childRuns = useMemo(() => runs.filter((entry) => entry.parent_id === run?.id), [runs, run?.id])
-  const inputLinks = useMemo(() => (run?.links ?? []).filter((link) => classifyLinkBucket(link) === 'inputs'), [run?.links])
-  const outputLinks = useMemo(() => (run?.links ?? []).filter((link) => classifyLinkBucket(link) === 'outputs'), [run?.links])
 
   async function handleAddManifestLink(manifest: ManifestSummary) {
-    if (!run || !linkingBucket) return
-    const nextType = linkingBucket === 'inputs' ? 'input_data' : 'output_data'
-    const duplicate = run.links.some((link) => link.target_type === 'manifest' && link.target_id === manifest.id && link.type === nextType)
+    if (!run) return
+    const duplicate = associatedManifests.some((entry) => entry.id === manifest.id)
     if (duplicate) {
-      setLinkingBucket(null)
+      setLinkingManifest(false)
       return
     }
 
-    const nextLinks = [
-      ...run.links,
-      {
-        type: nextType,
-        target_type: 'manifest',
-        target_id: manifest.id,
-        label: manifest.name,
-      },
-    ]
-
-    await updateRun(run.id, { links: nextLinks }, getToken)
-    setRun((current) => (current ? { ...current, links: nextLinks } : current))
-    setLinkingBucket(null)
-  }
-
-  async function handleRemoveLink(target: RunLink) {
-    if (!run) return
-    const nextLinks = run.links.filter((link) => !(
-      link.type === target.type
-      && link.target_type === target.target_type
-      && link.target_id === target.target_id
-      && (link.path ?? null) === (target.path ?? null)
-      && (link.label ?? null) === (target.label ?? null)
+    await addRunManifest(run.id, manifest.id, getToken)
+    const response = await listRunManifests(run.id, getToken)
+    setAssociatedManifests(response.manifests)
+    setRun((current) => (
+      current
+        ? { ...current, manifest_ids: Array.from(new Set([...current.manifest_ids, manifest.id])) }
+        : current
     ))
-    await updateRun(run.id, { links: nextLinks }, getToken)
-    setRun((current) => (current ? { ...current, links: nextLinks } : current))
+    setLinkingManifest(false)
   }
 
-  function handleLinkClick(link: RunLink) {
-    if (link.target_type === 'manifest') {
-      setSelectedManifestId(link.target_id)
-    }
+  async function handleRemoveManifest(manifest: RunManifestSummary) {
+    if (!run) return
+    await removeRunManifest(run.id, manifest.id, getToken)
+    setAssociatedManifests((current) => current.filter((entry) => entry.id !== manifest.id))
+    setRun((current) => (
+      current
+        ? { ...current, manifest_ids: current.manifest_ids.filter((id) => id !== manifest.id) }
+        : current
+    ))
+  }
+
+  function handleManifestClick(manifest: RunManifestSummary) {
+    setSelectedManifestId(manifest.id)
   }
 
   async function handleSaveReadme() {
@@ -391,36 +388,25 @@ export function RunDetailPage({ workspace }: { workspace: boolean }) {
               />
             </section>
 
-            <RunLinksPanel
-              title="Inputs"
-              links={inputLinks}
+            <RunManifestsPanel
+              manifests={associatedManifests}
               canAdd={Boolean(isOwner)}
               canRemove={Boolean(isOwner)}
-              onAdd={() => setLinkingBucket('inputs')}
-              onLinkClick={handleLinkClick}
-              onRemoveLink={(link) => void handleRemoveLink(link)}
-            />
-
-            <RunLinksPanel
-              title="Outputs"
-              links={outputLinks}
-              canAdd={Boolean(isOwner)}
-              canRemove={Boolean(isOwner)}
-              onAdd={() => setLinkingBucket('outputs')}
-              onLinkClick={handleLinkClick}
-              onRemoveLink={(link) => void handleRemoveLink(link)}
+              onAdd={() => setLinkingManifest(true)}
+              onManifestClick={handleManifestClick}
+              onRemoveManifest={(manifest) => void handleRemoveManifest(manifest)}
               dataTour="run-outputs"
             />
           </div>
         </div>
 
-        {linkingBucket ? (
+        {linkingManifest ? (
           <ManifestLinkPickerModal
             manifests={manifests}
             scope={manifestPickerScope}
             onScopeChange={setManifestPickerScope}
             onSelect={(manifest) => void handleAddManifestLink(manifest)}
-            onClose={() => setLinkingBucket(null)}
+            onClose={() => setLinkingManifest(false)}
           />
         ) : null}
 

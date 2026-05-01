@@ -131,6 +131,20 @@ def update_project(ctx: StoreCtx, project_id: str, **updates) -> LocalProject:
 
 def delete_project(ctx: StoreCtx, project_id: str) -> None:
     project_dir = get_project_dir(ctx, project_id)
+    from . import manifests, runs
+
+    for run in runs.list_runs(ctx, project_id):
+        for manifest_id in run.manifest_ids:
+            try:
+                manifest = manifests.get_manifest(ctx, manifest_id)
+            except StoreError:
+                continue
+            if run.id in manifest.run_ids:
+                manifests.update_manifest(
+                    ctx,
+                    manifest_id,
+                    run_ids=[value for value in manifest.run_ids if value != run.id],
+                )
     remove_path(project_dir)
     rebuild_catalog(ctx.home)
 

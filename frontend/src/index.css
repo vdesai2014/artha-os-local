@@ -1086,6 +1086,40 @@ select {
   padding: 16px;
 }
 
+.modal-panel-dataset {
+  position: relative;
+  height: min(92vh, 920px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-panel-dataset .modal-header {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.modal-panel-dataset .modal-header h2 {
+  display: none;
+}
+
+.modal-panel-dataset .modal-close {
+  background: rgba(8, 8, 7, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.modal-panel-dataset .modal-body-dataset {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px;
+}
+
 /* scrollbar for modal */
 .modal-panel::-webkit-scrollbar { width: 2px; }
 .modal-panel::-webkit-scrollbar-track { background: transparent; }
@@ -3641,6 +3675,121 @@ select {
   font-size: 13px;
 }
 
+.coupon-linked-runs {
+  width: min(440px, 100%);
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.coupon-linked-run-nav {
+  width: 34px;
+  min-height: 74px;
+  border: 1px solid var(--line);
+  background: var(--black-surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.coupon-linked-run-nav:hover:not(:disabled) {
+  border-color: var(--copper-dim);
+  background: var(--copper-ember);
+  color: var(--copper-white);
+}
+
+.coupon-linked-run-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.coupon-linked-run-card {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(196, 121, 63, 0.06), rgba(196, 121, 63, 0.01)),
+    var(--black-surface);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.coupon-linked-run-card:hover {
+  border-color: var(--copper-dim);
+  background: var(--black-active);
+}
+
+.coupon-linked-run-kicker {
+  color: var(--copper);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.coupon-linked-run-card strong,
+.coupon-linked-run-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.coupon-linked-run-card strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.coupon-linked-run-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.coupon-linked-run-meta code {
+  color: var(--copper-white);
+  background: var(--black-void);
+  border: 1px solid var(--line-faint);
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.coupon-linked-run-error {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--black-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.coupon-linked-run-error strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.coupon-linked-run-error span {
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 .coupon-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 260px;
@@ -4272,6 +4421,10 @@ select {
     grid-template-columns: 1fr;
     display: flex;
     flex-direction: column;
+  }
+
+  .coupon-linked-runs {
+    width: 100%;
   }
 
   .coupon-video-cell {
@@ -5278,4 +5431,25 @@ select {
 @keyframes coupon-toast-in {
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* ---- dataset viewer inside modal ---- */
+
+.modal-body-dataset .coupon-shell-compact {
+  min-height: 0;
+  height: 100%;
+  gap: 0;
+}
+
+.modal-body-dataset .coupon-layout-compact {
+  height: 100%;
+  max-height: 100%;
+  grid-template-columns: 260px minmax(0, 1fr) 280px;
+  gap: 10px;
+}
+
+.modal-body-dataset .coupon-layout-compact .coupon-episode-panel,
+.modal-body-dataset .coupon-layout-compact .coupon-viewer,
+.modal-body-dataset .coupon-layout-compact .coupon-metrics {
+  border-radius: var(--radius-sm);
 }

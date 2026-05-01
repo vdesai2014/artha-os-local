@@ -9,14 +9,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class RunLink(BaseModel):
-    type: str
-    target_type: str
-    target_id: str
-    path: str | None = None
-    label: str | None = None
-
-
 class LocalProject(BaseModel):
     id: str
     name: str
@@ -32,14 +24,9 @@ class LocalRun(BaseModel):
     project_id: str
     parent_id: str | None = None
     name: str
-    links: list[RunLink] = Field(default_factory=list)
+    manifest_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
-
-
-class AssociatedRun(BaseModel):
-    project_id: str | None = None
-    run_id: str
 
 
 class LocalManifest(BaseModel):
@@ -53,7 +40,7 @@ class LocalManifest(BaseModel):
     encoding: dict = Field(default_factory=dict)
     features: dict = Field(default_factory=dict)
     episode_ids: list[str] = Field(default_factory=list)
-    associated_runs: list[AssociatedRun] = Field(default_factory=list)
+    run_ids: list[str] = Field(default_factory=list)
     success_rate: float | None = None
     rated_episodes: int = 0
     created_at: datetime = Field(default_factory=utc_now)

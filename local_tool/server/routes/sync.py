@@ -17,7 +17,7 @@ class SyncPlanBody(BaseModel):
     operation: str
     entity_type: str
     entity_id: str
-    include_links: bool = False
+    include_manifests: bool = False
     include_descendants: bool = False
     cloud_api_base: str | None = None
     bearer_token: str | None = None
@@ -41,7 +41,7 @@ def get_sync_plan(body: SyncPlanBody, ctx: StoreCtx = Depends(get_ctx)):
             operation=body.operation,
             entity_type=body.entity_type,
             entity_id=body.entity_id,
-            include_links=body.include_links,
+            include_manifests=body.include_manifests,
             include_descendants=body.include_descendants,
             cloud_api_base=body.cloud_api_base,
             bearer_token=body.bearer_token,
@@ -65,7 +65,7 @@ def execute_sync_route(body: SyncExecuteBody, ctx: StoreCtx = Depends(get_ctx)):
             operation=body.operation,
             entity_type=body.entity_type,
             entity_id=body.entity_id,
-            include_links=body.include_links,
+            include_manifests=body.include_manifests,
             include_descendants=body.include_descendants,
             cloud_api_base=body.cloud_api_base,
             bearer_token=body.bearer_token,
@@ -82,7 +82,7 @@ def _request_from_body(body: SyncPlanBody) -> SyncRequest:
         operation=body.operation,
         entity_type=body.entity_type,
         entity_id=body.entity_id,
-        include_links=body.include_links,
+        include_manifests=body.include_manifests,
         include_descendants=body.include_descendants,
         cloud_api_base=body.cloud_api_base,
         bearer_token=body.bearer_token,
@@ -96,7 +96,7 @@ def _run_sync_job(ctx: StoreCtx, body: SyncExecuteBody, reporter: FileSyncProgre
             operation=body.operation,
             entity_type=body.entity_type,
             entity_id=body.entity_id,
-            include_links=body.include_links,
+            include_manifests=body.include_manifests,
             include_descendants=body.include_descendants,
             cloud_api_base=body.cloud_api_base,
             bearer_token=body.bearer_token,

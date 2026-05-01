@@ -6,7 +6,7 @@ export function ManifestViewerModal({ manifestId, onClose }: { manifestId: strin
     <Modal
       title="Dataset Viewer"
       onClose={onClose}
-      panelClassName="modal-panel-wide"
+      panelClassName="modal-panel-wide modal-panel-dataset"
       bodyClassName="modal-body-dataset"
     >
       <DatasetViewer manifestId={manifestId} compact />

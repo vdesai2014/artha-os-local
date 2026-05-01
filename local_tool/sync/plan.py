@@ -33,8 +33,8 @@ def build_sync_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
     if request.operation == "clone":
         if request.entity_type != "project":
             raise SyncPlanError(f"Unsupported clone entity type for now: {request.entity_type}")
-        if request.include_links:
-            raise SyncPlanError("Clone does not support include_links")
+        if request.include_manifests:
+            raise SyncPlanError("Clone does not support include_manifests")
         return _build_project_clone_plan(request)
 
     if request.operation == "pull":
@@ -54,7 +54,7 @@ def _build_project_push_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
     project = projects.get_project(ctx, request.entity_id)
     local_runs_unsorted = runs.list_runs(ctx, project.id)
     local_runs = sorted(local_runs_unsorted, key=lambda run: (_run_depth(run, local_runs_unsorted), run.created_at, run.id))
-    linked_manifests, warnings = _collect_linked_manifests(ctx, local_runs) if request.include_links else ([], [])
+    linked_manifests, warnings = _collect_linked_manifests(ctx, local_runs) if request.include_manifests else ([], [])
     scope = SyncScope(
         root_entity_type="project",
         root_entity_id=project.id,
@@ -89,7 +89,7 @@ def _build_run_push_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
 
     deduped_ids = list(dict.fromkeys(selected_ids))
     selected_runs = [by_id[run_id] for run_id in deduped_ids]
-    linked_manifests, warnings = _collect_linked_manifests(ctx, selected_runs) if request.include_links else ([], [])
+    linked_manifests, warnings = _collect_linked_manifests(ctx, selected_runs) if request.include_manifests else ([], [])
     scope = SyncScope(
         root_entity_type="run",
         root_entity_id=root_run.id,
@@ -150,7 +150,7 @@ def _build_project_clone_plan(request: SyncRequest) -> SyncPlan:
                 "project_id": item["project_id"],
                 "parent_id": item.get("parent_id"),
                 "name": item["name"],
-                "links": [],
+                "manifest_ids": [],
                 "created_at": item.get("created_at"),
                 "updated_at": item.get("updated_at"),
             }
@@ -265,7 +265,10 @@ def _build_project_pull_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
             "updated_at": source_project_raw.get("updated_at"),
         }
     )
-    source_runs = [_cloud_run_from_payload(source_run_details[item["id"]], include_links=request.include_links) for item in source_runs_list]
+    source_runs = [
+        _cloud_run_from_payload(source_run_details[item["id"]], include_manifests=request.include_manifests)
+        for item in source_runs_list
+    ]
     source_runs = sorted(source_runs, key=lambda run: (_run_depth(run, source_runs), run.created_at, run.id))
     linked_manifests, linked_episodes = _collect_cloud_link_scope(request=request, source_runs=source_runs, source_run_details=source_run_details)
 
@@ -332,18 +335,14 @@ def _build_project_pull_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
                     "name": run.name,
                     "created_at": run.created_at.isoformat(),
                     "updated_at": run.updated_at.isoformat(),
-                    **(
-                        {"links": [link.model_dump() for link in run.links]}
-                        if request.include_links
-                        else {}
-                    ),
+                    **({"manifest_ids": list(run.manifest_ids)} if request.include_manifests else {}),
                 },
             )
         )
         source_run_raw = source_run_details[run.id]
-        if source_run_raw.get("links") and not request.include_links:
+        if source_run_raw.get("manifest_ids") and not request.include_manifests:
             plan.warnings.append(
-                f"Run {run.id} has cloud links that are omitted from pull because include_links is disabled."
+                f"Run {run.id} has cloud manifests that are omitted from pull because include_manifests is disabled."
             )
         for path, meta in sorted((source_run_raw.get("files") or {}).items()):
             plan.file_actions.append(
@@ -393,7 +392,10 @@ def _build_run_pull_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
             "updated_at": source_project_raw.get("updated_at"),
         }
     )
-    all_runs = [_cloud_run_from_payload(source_run_details[item["id"]], include_links=request.include_links) for item in source_runs_list]
+    all_runs = [
+        _cloud_run_from_payload(source_run_details[item["id"]], include_manifests=request.include_manifests)
+        for item in source_runs_list
+    ]
     by_id = {run.id: run for run in all_runs}
     root_run = by_id.get(request.entity_id)
     if root_run is None:
@@ -483,18 +485,14 @@ def _build_run_pull_plan(ctx: StoreCtx, request: SyncRequest) -> SyncPlan:
                     "name": run.name,
                     "created_at": run.created_at.isoformat(),
                     "updated_at": run.updated_at.isoformat(),
-                    **(
-                        {"links": [link.model_dump() for link in run.links]}
-                        if request.include_links
-                        else {}
-                    ),
+                    **({"manifest_ids": list(run.manifest_ids)} if request.include_manifests else {}),
                 },
             )
         )
         source_run_raw = source_run_details[run.id]
-        if source_run_raw.get("links") and not request.include_links:
+        if source_run_raw.get("manifest_ids") and not request.include_manifests:
             plan.warnings.append(
-                f"Run {run.id} has cloud links that are omitted from pull because include_links is disabled."
+                f"Run {run.id} has cloud manifests that are omitted from pull because include_manifests is disabled."
             )
         for path, meta in sorted((source_run_raw.get("files") or {}).items()):
             plan.file_actions.append(
@@ -578,7 +576,7 @@ def _plan_push(ctx: StoreCtx, scope: SyncScope, request: SyncRequest) -> SyncPla
         plan.metadata_actions.extend(
             [
                 MetadataAction("ensure_remote", "run", run.id, {"project_id": run.project_id}),
-                MetadataAction("patch_remote", "run", run.id, {"include_links": False}),
+                MetadataAction("patch_remote", "run", run.id),
             ]
         )
         for path in sorted(run_decision.included):
@@ -606,24 +604,31 @@ def _plan_push(ctx: StoreCtx, scope: SyncScope, request: SyncRequest) -> SyncPla
             )
         )
 
+    linked_pairs: set[tuple[str, str]] = set()
     for run in scope.runs:
-        if not run.links:
+        linked_manifest_ids = set(run.manifest_ids)
+        if not linked_manifest_ids:
             continue
-        linked_manifest_ids = {
-            link.target_id
-            for link in run.links
-            if link.target_type == "manifest"
-        }
         if linked_manifest_ids and not linked_manifest_ids.issubset(synced_manifest_ids):
             plan.warnings.append(
-                f"Run {run.id} has manifest links that are out of scope; they will be omitted from cloud patch."
+                f"Run {run.id} has manifests that are out of scope; those associations will be omitted."
             )
+        for manifest_id in sorted(linked_manifest_ids.intersection(synced_manifest_ids)):
+            linked_pairs.add((run.id, manifest_id))
+
+    scoped_run_ids = {run.id for run in scope.runs}
+    for manifest in scope.manifests:
+        for run_id in manifest.run_ids:
+            if run_id in scoped_run_ids:
+                linked_pairs.add((run_id, manifest.id))
+
+    for run_id, manifest_id in sorted(linked_pairs):
         plan.link_actions.append(
             LinkAction(
-                "patch_run_links",
+                "attach_run_manifest",
                 "run",
-                run.id,
-                {"allowed_manifest_ids": sorted(synced_manifest_ids)},
+                run_id,
+                {"manifest_id": manifest_id},
             )
         )
 
@@ -635,13 +640,11 @@ def _collect_linked_manifests(ctx: StoreCtx, local_runs: list) -> tuple[list, li
     warnings: list[str] = []
     seen: set[str] = set()
     for run in local_runs:
-        for link in run.links:
-            if link.target_type != "manifest":
+        for manifest_id in run.manifest_ids:
+            if manifest_id in seen:
                 continue
-            if link.target_id in seen:
-                continue
-            seen.add(link.target_id)
-            manifest_ids.append(link.target_id)
+            seen.add(manifest_id)
+            manifest_ids.append(manifest_id)
     records = []
     for manifest_id in manifest_ids:
         try:
@@ -651,14 +654,14 @@ def _collect_linked_manifests(ctx: StoreCtx, local_runs: list) -> tuple[list, li
     return records, warnings
 
 
-def _cloud_run_from_payload(payload: dict, *, include_links: bool) -> LocalRun:
+def _cloud_run_from_payload(payload: dict, *, include_manifests: bool) -> LocalRun:
     return LocalRun.model_validate(
         {
             "id": payload["id"],
             "project_id": payload["project_id"],
             "parent_id": payload.get("parent_id"),
             "name": payload["name"],
-            "links": payload.get("links", []) if include_links else [],
+            "manifest_ids": payload.get("manifest_ids", []) if include_manifests else [],
             "created_at": payload.get("created_at"),
             "updated_at": payload.get("updated_at"),
         }
@@ -671,7 +674,7 @@ def _collect_cloud_link_scope(
     source_runs: list[LocalRun],
     source_run_details: dict[str, dict],
 ) -> tuple[list[LocalManifest], list[LocalEpisode]]:
-    if not request.include_links:
+    if not request.include_manifests:
         return [], []
 
     config = resolve_cloud_sync_config(
@@ -684,10 +687,7 @@ def _collect_cloud_link_scope(
             manifest_ids: list[str] = []
             seen_manifest_ids: set[str] = set()
             for run in source_runs:
-                for link in source_run_details[run.id].get("links", []) or []:
-                    if link.get("target_type") != "manifest":
-                        continue
-                    manifest_id = link.get("target_id")
+                for manifest_id in source_run_details[run.id].get("manifest_ids", []) or []:
                     if not manifest_id or manifest_id in seen_manifest_ids:
                         continue
                     seen_manifest_ids.add(manifest_id)
@@ -715,10 +715,6 @@ def _collect_cloud_link_scope(
 
 
 def _cloud_manifest_from_payload(payload: dict, episode_ids: list[str]) -> LocalManifest:
-    source_run_id = payload.get("source_run_id")
-    associated_runs = payload.get("associated_runs") or (
-        [{"project_id": None, "run_id": source_run_id}] if source_run_id else []
-    )
     return LocalManifest.model_validate(
         {
             "id": payload["id"],
@@ -730,8 +726,8 @@ def _cloud_manifest_from_payload(payload: dict, episode_ids: list[str]) -> Local
             "fps": payload.get("fps"),
             "encoding": payload.get("encoding", {}),
             "features": payload.get("features", {}),
-            "associated_runs": associated_runs,
             "episode_ids": episode_ids,
+            "run_ids": payload.get("run_ids", []),
             "success_rate": payload.get("success_rate"),
             "rated_episodes": payload.get("rated_episodes", 0),
             "created_at": payload.get("created_at"),
@@ -791,8 +787,8 @@ def _append_pull_linked_manifest_actions(ctx: StoreCtx, plan: SyncPlan) -> None:
                     "fps": manifest.fps,
                     "encoding": dict(manifest.encoding),
                     "features": dict(manifest.features),
-                    "associated_runs": [run.model_dump() for run in manifest.associated_runs],
                     "episode_ids": list(manifest.episode_ids),
+                    "run_ids": list(manifest.run_ids),
                     "success_rate": manifest.success_rate,
                     "rated_episodes": manifest.rated_episodes,
                     "created_at": manifest.created_at.isoformat(),

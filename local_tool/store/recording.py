@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..io import StoreError
 from ..models import RecordingContext, utc_now
-from .manifests import create_manifest, get_manifest, list_manifests, update_manifest
+from .manifests import create_manifest, get_manifest, list_manifests
 from .projects import StoreCtx
 from .runs import get_run
 
@@ -30,10 +30,6 @@ def ensure_manifest_for_recording(ctx: StoreCtx, recording: RecordingContext) ->
                 name=recording.manifest_name,
                 type=manifest_type,
                 fps=recording.fps,
-                associated_runs=(
-                    [{"project_id": recording.source_project_id, "run_id": recording.source_run_id}]
-                    if recording.source_run_id else []
-                ),
             )
     elif recording.manifest_name:
         manifest = next((item for item in list_manifests(ctx) if item.name == recording.manifest_name), None)
@@ -45,10 +41,6 @@ def ensure_manifest_for_recording(ctx: StoreCtx, recording: RecordingContext) ->
                 name=recording.manifest_name,
                 type=manifest_type,
                 fps=recording.fps,
-                associated_runs=(
-                    [{"project_id": recording.source_project_id, "run_id": recording.source_run_id}]
-                    if recording.source_run_id else []
-                ),
             )
     else:
         raise StoreError("Recording context must include manifest_id or manifest_name", "CONFLICT")
@@ -67,26 +59,14 @@ def ensure_manifest_for_recording(ctx: StoreCtx, recording: RecordingContext) ->
             "CONFLICT",
         )
 
-    if recording.source_run_id:
-        candidate = {"project_id": recording.source_project_id, "run_id": recording.source_run_id}
-        existing = [item.model_dump() for item in manifest.associated_runs]
-        if candidate not in existing:
-            manifest = update_manifest(ctx, manifest.id, associated_runs=[*existing, candidate])
-
-    resolved_project_id = recording.source_project_id
-    resolved_run_id = recording.source_run_id
-    if not resolved_run_id and manifest.associated_runs:
-        resolved_project_id = manifest.associated_runs[0].project_id
-        resolved_run_id = manifest.associated_runs[0].run_id
-
     return RecordingContext(
         manifest_id=manifest.id,
         manifest_name=manifest.name,
         manifest_type=manifest.type,
         task=recording.task,
         task_description=recording.task_description,
-        source_project_id=resolved_project_id,
-        source_run_id=resolved_run_id,
+        source_project_id=recording.source_project_id,
+        source_run_id=recording.source_run_id,
         source_checkpoint=recording.source_checkpoint,
         policy_name=recording.policy_name,
         fps=recording.fps if recording.fps is not None else manifest.fps,

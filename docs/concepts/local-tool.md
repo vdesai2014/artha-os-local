@@ -24,9 +24,10 @@ The HTTP API has two consumers with the same interface:
 
 1. **The frontend** — renders projects/runs/datasets, lets the user edit
    READMEs, attach episodes to manifests, browse files.
-2. **The agent** — when the user says *"add the new manifest as a link
-   to the synthetic-data run"*, the agent calls `PATCH /api/runs/{id}`
-   with an updated `links` list. Same endpoints, same semantics.
+2. **The agent** — when the user says *"link this manifest to the
+   synthetic-data run"*, the agent calls
+   `POST /api/runs/{id}/manifests` or `POST /api/manifests/{id}/runs`.
+   Same endpoints, same semantics.
 
 Anything the frontend can do, the agent can do.
 

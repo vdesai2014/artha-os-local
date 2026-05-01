@@ -45,7 +45,7 @@ class FileDownloadBody(BaseModel):
 
 
 class ProjectSyncBody(BaseModel):
-    include_links: bool = False
+    include_manifests: bool = False
     cloud_api_base: str | None = None
     bearer_token: str | None = None
 
@@ -204,7 +204,7 @@ def sync_project(project_id: str, body: ProjectSyncBody | None = None, ctx: Stor
         return sync_project_to_cloud(
             ctx,
             project_id,
-            include_links=body.include_links if body else False,
+            include_manifests=body.include_manifests if body else False,
             cloud_api_base=body.cloud_api_base if body else None,
             bearer_token=body.bearer_token if body else None,
         )
@@ -220,7 +220,7 @@ def pull_project(project_id: str, body: ProjectSyncBody | None = None, ctx: Stor
         return pull_project_from_cloud(
             ctx,
             project_id,
-            include_links=body.include_links if body else False,
+            include_manifests=body.include_manifests if body else False,
             cloud_api_base=body.cloud_api_base if body else None,
             bearer_token=body.bearer_token if body else None,
         )

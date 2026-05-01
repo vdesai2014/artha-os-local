@@ -22,7 +22,7 @@ def _request_dict(request: SyncRequest) -> dict[str, Any]:
         "operation": request.operation,
         "entity_type": request.entity_type,
         "entity_id": request.entity_id,
-        "include_links": request.include_links,
+        "include_manifests": request.include_manifests,
         "include_descendants": request.include_descendants,
         "dry_run": request.dry_run,
     }
@@ -154,7 +154,7 @@ class FileSyncProgressReporter(SyncProgressReporter):
                     "metadata_done": 0,
                     "files_done": 0,
                     "bytes_done": 0,
-                    "links_done": 0,
+                    "associations_done": 0,
                 },
             },
             "result": None,
@@ -214,7 +214,7 @@ class FileSyncProgressReporter(SyncProgressReporter):
                 counters["files_done"] += 1
                 counters["bytes_done"] += max(0, int(data.get("size") or 0))
             elif phase == "link":
-                counters["links_done"] += 1
+                counters["associations_done"] += 1
         now = entry["t"]
         self._payload["execute"]["updated_at"] = now
         self._touch(now)

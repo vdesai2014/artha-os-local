@@ -4,11 +4,6 @@ export interface DatasetFeatureSpec {
   names?: string[]
 }
 
-export interface DatasetAssociatedRun {
-  project_id: string | null
-  run_id: string
-}
-
 export interface DatasetManifestDetail {
   id: string
   owner_user_id: string
@@ -20,12 +15,25 @@ export interface DatasetManifestDetail {
   fps: number | null
   encoding: Record<string, unknown>
   features: Record<string, DatasetFeatureSpec>
-  associated_runs: DatasetAssociatedRun[]
+  run_ids: string[]
   success_rate: number | null
   rated_episodes: number
   episode_count: number
   created_at: string
   updated_at: string
+}
+
+export interface DatasetManifestRunSummary {
+  id: string
+  project_id: string
+  parent_id: string | null
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DatasetManifestRunListResponse {
+  runs: DatasetManifestRunSummary[]
 }
 
 export interface DatasetEpisodeSummary {

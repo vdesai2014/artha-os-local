@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import dataclass
+import os
+import sys
 import time
 from typing import Optional, Type, TypeVar
 
@@ -60,6 +62,33 @@ def _is_already_exists_error(exc: Exception) -> bool:
     return "AlreadyExists" in msg or "already exists" in msg.lower()
 
 
+def _log_shm(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _writer_context(topic: str, state_type: Type) -> str:
+    try:
+        iox_type = iox2.get_type_name(state_type)
+    except Exception:
+        iox_type = getattr(state_type, "__name__", repr(state_type))
+    service_name = (
+        os.environ.get("ARTHA_SERVICE_NAME")
+        or os.environ.get("SERVICE_NAME")
+        or "unknown"
+    )
+    return " ".join([
+        f"topic={topic!r}",
+        f"key={KEY.value}",
+        f"service={service_name!r}",
+        f"pid={os.getpid()}",
+        f"session={os.environ.get('ARTHA_SESSION_ID', 'unset')!r}",
+        f"runtime_dir={os.environ.get('ARTHA_RUNTIME_DIR', 'unset')!r}",
+        f"type={getattr(state_type, '__name__', repr(state_type))}",
+        f"iox2_type={iox_type!r}",
+        f"size={ctypes.sizeof(state_type)}",
+    ])
+
+
 class BlackboardWriter:
     """Writes latest value to a named blackboard entry."""
 
@@ -70,12 +99,11 @@ class BlackboardWriter:
         self._node = _get_node()
         if initial is None:
             initial = state_type()
-        self._service = self._create_or_reopen(topic, initial)
-        self._writer = self._service.writer_builder().create()
-        self._entry = self._writer.entry(KEY, state_type)
+        self._service = self._create_or_reopen(topic, initial, state_type)
+        self._claim_entry(topic, state_type, initial)
         self._closed = False
 
-    def _create_or_reopen(self, topic: str, initial):
+    def _create_or_reopen(self, topic: str, initial, state_type: Type[T]):
         """Create blackboard service, recovering from stale segments left by crashed processes.
 
         Strategy:
@@ -94,21 +122,33 @@ class BlackboardWriter:
         except iox2.BlackboardCreateError as e:
             if not _is_already_exists_error(e):
                 raise RuntimeError(
-                    f"[SHM] {topic}: blackboard create failed: {e}"
+                    f"[SHM] {topic}: blackboard create failed; "
+                    f"{_writer_context(topic, state_type)} error={e!r}"
                 ) from e
+            first_error = e
 
-        print(f"[SHM] {topic}: AlreadyExists, cleaning dead nodes")
+        _log_shm(
+            f"[SHM] {topic}: blackboard AlreadyExists; "
+            f"cleaning dead nodes and retrying create; "
+            f"{_writer_context(topic, state_type)} error={first_error!r}"
+        )
         self._node.cleanup_dead_nodes(iox2.ServiceType.Ipc, self._node.config)
         try:
             return builder().create()
         except iox2.BlackboardCreateError as e:
             if not _is_already_exists_error(e):
                 raise RuntimeError(
-                    f"[SHM] {topic}: create after cleanup failed: {e}"
+                    f"[SHM] {topic}: create after cleanup failed; "
+                    f"{_writer_context(topic, state_type)} error={e!r}"
                 ) from e
+            reopen_error = e
 
         # Stale service held alive by readers — open and take over the writer slot
-        print(f"[SHM] {topic}: reopening stale service as writer")
+        _log_shm(
+            f"[SHM] {topic}: create still AlreadyExists; "
+            f"reopening stale service as writer; "
+            f"{_writer_context(topic, state_type)} error={reopen_error!r}"
+        )
         try:
             return (
                 self._node.service_builder(iox2.ServiceName.new(topic))
@@ -117,8 +157,55 @@ class BlackboardWriter:
             )
         except Exception as e:
             raise RuntimeError(
-                f"[SHM] {topic}: stale blackboard reopen failed: {e}"
+                f"[SHM] {topic}: stale blackboard reopen failed; "
+                f"{_writer_context(topic, state_type)} error={e!r}"
             ) from e
+
+    def _claim_entry(self, topic: str, state_type: Type[T], initial: T) -> None:
+        self._writer = self._service.writer_builder().create()
+        try:
+            self._entry = self._writer.entry(KEY, state_type)
+            return
+        except iox2.EntryHandleMutError as e:
+            if not _is_already_exists_error(e):
+                raise RuntimeError(
+                    f"[SHM] {topic}: mutable writer entry acquisition failed; "
+                    f"{_writer_context(topic, state_type)} error={e!r}"
+                ) from e
+            first_error = e
+
+        _log_shm(
+            f"[SHM] {topic}: mutable writer entry already exists; "
+            f"cleaning dead nodes and retrying once; "
+            f"{_writer_context(topic, state_type)} error={first_error!r}"
+        )
+        self._entry = None
+        self._writer = None
+        self._service = None
+        self._node.cleanup_dead_nodes(iox2.ServiceType.Ipc, self._node.config)
+        self._service = self._create_or_reopen(topic, initial, state_type)
+        self._writer = self._service.writer_builder().create()
+
+        try:
+            self._entry = self._writer.entry(KEY, state_type)
+        except iox2.EntryHandleMutError as retry_error:
+            if not _is_already_exists_error(retry_error):
+                raise RuntimeError(
+                    f"[SHM] {topic}: mutable writer entry retry failed; "
+                    f"{_writer_context(topic, state_type)} error={retry_error!r}"
+                ) from retry_error
+            raise RuntimeError(
+                f"[SHM] {topic}: mutable writer entry still exists after cleanup. "
+                f"Another writer may still be alive, or stale iceoryx2 metadata "
+                f"may remain. Operational recovery: artha down; "
+                f"rm -rf /tmp/iceoryx2; artha up --force. "
+                f"{_writer_context(topic, state_type)} error={retry_error!r}"
+            ) from retry_error
+
+        _log_shm(
+            f"[SHM] {topic}: recovered mutable writer entry after cleanup; "
+            f"{_writer_context(topic, state_type)} initial_error={first_error!r}"
+        )
 
     def write(self, state: T) -> bool:
         """Update the blackboard entry with a new value.

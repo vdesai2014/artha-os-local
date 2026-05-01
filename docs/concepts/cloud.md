@@ -74,12 +74,12 @@ manifest, many contributors.
   explicit file-delete endpoints (`/api/projects/{id}/files/delete`,
   `/api/runs/{id}/files/delete`) to remove cloud assets such as obsolete
   checkpoints.
-- **`source_run_id` on a manifest is singular.** Cloud does not model
-  multi-source manifests. Keep local in step.
+- **Run-manifest links are explicit associations.** Runs expose
+  `manifest_ids`; manifests expose `run_ids`; create/remove the pair with
+  `/api/runs/{id}/manifests` or `/api/manifests/{id}/runs`.
 - **PATCH is narrow.** Most resource fields are set at creation and
-  immutable (manifest `type`, `fps`, `encoding`, `features`,
-  `source_run_id`; project/run identity). Name/description/tags/is_public
-  are patchable.
+  immutable (project/run identity). Project/run names, manifest metadata,
+  and episode descriptive/provenance fields have dedicated patch surfaces.
 
 ## Clone is client-side
 

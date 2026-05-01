@@ -11,6 +11,7 @@ import type {
   ProjectScope,
   ProjectSyncResult,
   RunDetail,
+  RunManifestListResponse,
   RunListResponse,
   RunMutationInput,
   RunPatchInput,
@@ -73,6 +74,18 @@ export function deleteRun(runId: string, _getToken?: TokenGetter) {
 
 export function getRun(runId: string, _getToken?: TokenGetter) {
   return api.get<RunDetail>(`/api/runs/${runId}`)
+}
+
+export function listRunManifests(runId: string, _getToken?: TokenGetter) {
+  return api.get<RunManifestListResponse>(`/api/runs/${runId}/manifests`)
+}
+
+export function addRunManifest(runId: string, manifestId: string, _getToken?: TokenGetter) {
+  return api.post<{ run_id: string; manifest_id: string }>(`/api/runs/${runId}/manifests`, { manifest_id: manifestId })
+}
+
+export function removeRunManifest(runId: string, manifestId: string, _getToken?: TokenGetter) {
+  return api.delete<void>(`/api/runs/${runId}/manifests/${manifestId}`)
 }
 
 export function listProjectFiles(projectId: string, _getToken?: TokenGetter) {

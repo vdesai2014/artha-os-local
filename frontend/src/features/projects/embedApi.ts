@@ -11,7 +11,7 @@ export interface ManifestDetail {
   fps: number | null
   encoding: Record<string, unknown>
   features: Record<string, { dtype?: string; shape?: number[] }>
-  source_run_id: string | null
+  run_ids: string[]
   episode_count: number
   created_at: string
   updated_at: string

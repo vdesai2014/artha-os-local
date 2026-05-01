@@ -5,7 +5,7 @@ from pathlib import Path
 from ..catalog import rebuild_catalog, resolve_entity_path
 from ..ids import generate_id
 from ..io import StoreError, normalize_temporal_kwargs, read_model, remove_path, write_model
-from ..models import AssociatedRun, LocalEpisode, LocalManifest, utc_now
+from ..models import LocalEpisode, LocalManifest, utc_now
 from ..paths import episode_json, episodes_root, manifest_json, manifest_path, manifests_root
 from .episodes import get_episode, update_episode
 from .projects import StoreCtx, ensure_store_roots
@@ -56,6 +56,12 @@ def list_manifests(ctx: StoreCtx) -> list[LocalManifest]:
     return manifests
 
 
+def _ensure_unique_manifest_name(ctx: StoreCtx, name: str, *, exclude_id: str | None = None) -> None:
+    for manifest in list_manifests(ctx):
+        if manifest.id != exclude_id and manifest.name == name:
+            raise StoreError(f"Manifest name already exists: {name}", "CONFLICT")
+
+
 def create_manifest(
     ctx: StoreCtx,
     *,
@@ -67,7 +73,7 @@ def create_manifest(
     fps: int | None = None,
     encoding: dict | None = None,
     features: dict | None = None,
-    associated_runs: list[dict] | list[AssociatedRun] | None = None,
+    run_ids: list[str] | None = None,
     success_rate: float | None = None,
     rated_episodes: int = 0,
     episode_ids: list[str] | None = None,
@@ -76,6 +82,7 @@ def create_manifest(
     updated_at=None,
 ) -> LocalManifest:
     ensure_store_roots(ctx)
+    _ensure_unique_manifest_name(ctx, name, exclude_id=manifest_id)
     if manifest_id is not None:
         try:
             get_manifest(ctx, manifest_id)
@@ -96,7 +103,7 @@ def create_manifest(
             "encoding": encoding or {},
             "features": features or {},
             "episode_ids": episode_ids or [],
-            "associated_runs": associated_runs or [],
+            "run_ids": list(dict.fromkeys(run_ids or [])),
             "success_rate": success_rate,
             "rated_episodes": rated_episodes,
             "created_at": created_at or utc_now(),
@@ -123,6 +130,10 @@ def update_manifest(ctx: StoreCtx, manifest_id: str, **updates) -> LocalManifest
     }
     if not clean:
         raise StoreError("No fields to update", "CONFLICT")
+    if "name" in clean and clean["name"] != manifest.name:
+        _ensure_unique_manifest_name(ctx, clean["name"], exclude_id=manifest_id)
+    if "run_ids" in clean:
+        clean["run_ids"] = list(dict.fromkeys(clean["run_ids"]))
     clean.setdefault("updated_at", utc_now())
     clean = normalize_temporal_kwargs(clean)
     updated = manifest.model_copy(update=clean)
@@ -137,6 +148,19 @@ def update_manifest(ctx: StoreCtx, manifest_id: str, **updates) -> LocalManifest
 
 def delete_manifest(ctx: StoreCtx, manifest_id: str) -> None:
     manifest = get_manifest(ctx, manifest_id)
+    from . import runs
+
+    for run_id in manifest.run_ids:
+        try:
+            run = runs.get_run(ctx, run_id)
+        except StoreError:
+            continue
+        if manifest_id in run.manifest_ids:
+            runs.update_run(
+                ctx,
+                run_id,
+                manifest_ids=[value for value in run.manifest_ids if value != manifest_id],
+            )
     for episode_id in manifest.episode_ids:
         episode = get_episode(ctx, episode_id)
         manifest_ids = [value for value in episode.manifest_ids if value != manifest_id]
@@ -145,23 +169,12 @@ def delete_manifest(ctx: StoreCtx, manifest_id: str) -> None:
     rebuild_catalog(ctx.home)
 
 
-def _merge_associated_runs(current: list[AssociatedRun], episode: LocalEpisode) -> list[AssociatedRun]:
-    if not episode.source_run_id:
-        return current
-    candidate = AssociatedRun(project_id=episode.source_project_id, run_id=episode.source_run_id)
-    for existing in current:
-        if existing.run_id == candidate.run_id and existing.project_id == candidate.project_id:
-            return current
-    return [*current, candidate]
-
-
 def add_manifest_episodes(ctx: StoreCtx, manifest_id: str, episode_ids: list[str]) -> dict[str, int | dict[str, str]]:
     manifest = get_manifest(ctx, manifest_id)
     added = 0
     already_linked = 0
     errors: dict[str, str] = {}
     current = list(manifest.episode_ids)
-    associated_runs = list(manifest.associated_runs)
     for episode_id in episode_ids:
         if episode_id in current:
             already_linked += 1
@@ -172,13 +185,12 @@ def add_manifest_episodes(ctx: StoreCtx, manifest_id: str, episode_ids: list[str
             errors[episode_id] = str(exc)
             continue
         current.append(episode_id)
-        associated_runs = _merge_associated_runs(associated_runs, episode)
         manifest_ids = list(episode.manifest_ids)
         if manifest_id not in manifest_ids:
             manifest_ids.append(manifest_id)
             update_episode(ctx, episode_id, manifest_ids=manifest_ids)
         added += 1
-    update_manifest(ctx, manifest_id, episode_ids=current, associated_runs=associated_runs)
+    update_manifest(ctx, manifest_id, episode_ids=current)
     return {"added": added, "already_linked": already_linked, "errors": errors}
 
 

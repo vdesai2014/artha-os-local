@@ -33,9 +33,10 @@ Upload local entity + its children to the cloud. Additive only; does
 not delete remote content.
 
 - **Project push:** project + all runs; manifests opt-in via
-  `include_links=True`.
+  `include_manifests=True`.
 - **Run push:** run + project skeleton + ancestor-chain. Descendants
-  opt-in via `include_descendants=True`.
+  opt-in via `include_descendants=True`; linked manifests opt-in via
+  `include_manifests=True`.
 - **Manifest push:** manifest + its episode payloads.
 
 IDs are preserved. The pusher is the owner.
@@ -50,10 +51,14 @@ puller owns a local mirror of the same thing. Calling pull twice
 updates in place.
 
 - **Project pull:** project + runs; manifests opt-in via
-  `include_links=True`.
+  `include_manifests=True`.
 - **Run pull:** run + project skeleton + ancestor-chain. Descendants
-  opt-in via `include_descendants=True`.
-- **Manifest pull:** manifest + its episodes.
+  opt-in via `include_descendants=True`; linked manifests opt-in via
+  `include_manifests=True`.
+- **Manifest pull:** manifest + its episodes. Pull also stores the
+  manifest's linked `run_ids`, but does not pull those run records/files.
+  If a linked run is not present locally, the viewer shows the linked ID
+  and reports that local run metadata is unavailable.
 
 ### clone
 
@@ -119,17 +124,23 @@ This means:
 Agents should treat sync as a monotonic transfer primitive, not a
 bidirectional mirror.
 
-## `associated_runs` ↔ cloud `source_run_id`
+## Run ↔ manifest associations
 
-Local `LocalManifest.associated_runs` is a list; the cloud's
-`source_run_id` is a singular string. Sync translates at the boundary:
-push sends `associated_runs[0].run_id` and drops the rest; pull wraps
-the cloud's `source_run_id` in a single-entry list.
+Local and cloud both model run-manifest links as a simple bidirectional
+association:
 
-This is a **point of friction** — the local model is strictly more
-expressive (a manifest can track episodes from multiple source runs).
-See `to-do.md` for the open decision to revert local, expand cloud, or
-keep the shim.
+- Local runs store `manifest_ids`.
+- Local manifests store `run_ids`.
+- Cloud stores the pair in `run_manifests`.
+
+The association is explicit metadata. Sync only follows run → manifest
+edges when `include_manifests=True`; otherwise project/run push/pull
+stays project/run-only. Manifest pull is manifest-centric, so it always
+pulls episodes and also preserves the manifest's `run_ids` for display.
+
+Episode provenance remains separate: `source_project_id`,
+`source_run_id`, `source_checkpoint`, `policy_name`, `collection_mode`,
+and `reward` live on the episode.
 
 ## The phases
 
@@ -142,10 +153,10 @@ result = execute_sync_plan(ctx, plan, config)
 ```
 
 - `plan_sync` resolves scope, reads remote/local state, builds
-  metadata/file/link actions. No mutation.
-- `execute_sync_plan` applies the actions in order (metadata → files →
-  links). Remote changes go through `CloudPortal`; local changes go
-  through the store APIs.
+  metadata, file, and association actions. No mutation.
+- `execute_sync_plan` applies the actions in order: metadata, files,
+  then associations. Remote run-manifest changes go through the cloud
+  association endpoints; local changes go through the store APIs.
 
 Convenience wrappers (`sync_project_to_cloud`,
 `pull_project_from_cloud`, etc.) compose plan+execute for the common

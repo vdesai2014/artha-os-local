@@ -8,7 +8,7 @@ from blake3 import blake3
 from ..catalog import rebuild_catalog, resolve_entity_path
 from ..ids import generate_id
 from ..io import StoreError, normalize_temporal_kwargs, read_model, remove_path, write_model, write_text_atomic
-from ..models import LocalRun, RunLink, utc_now
+from ..models import LocalRun, utc_now
 from ..paths import folder_name, project_json, run_json, run_readme, runs_root
 from .projects import StoreCtx, get_project, get_project_dir
 
@@ -56,7 +56,7 @@ def create_run(
     project_id: str,
     name: str,
     parent_id: str | None = None,
-    links: list[dict] | list[RunLink] | None = None,
+    manifest_ids: list[str] | None = None,
     run_id: str | None = None,
     created_at=None,
     updated_at=None,
@@ -73,7 +73,7 @@ def create_run(
             "project_id": project_id,
             "parent_id": parent_id,
             "name": name,
-            "links": [RunLink.model_validate(item) for item in (links or [])],
+            "manifest_ids": list(dict.fromkeys(manifest_ids or [])),
             "created_at": created_at or utc_now(),
             "updated_at": updated_at or utc_now(),
         }
@@ -120,8 +120,8 @@ def update_run(ctx: StoreCtx, run_id: str, **updates) -> LocalRun:
     if not clean:
         raise StoreError("No fields to update", "CONFLICT")
 
-    if "links" in clean:
-        clean["links"] = [RunLink.model_validate(item) for item in clean["links"]]
+    if "manifest_ids" in clean:
+        clean["manifest_ids"] = list(dict.fromkeys(clean["manifest_ids"]))
 
     if "parent_id" in clean and clean["parent_id"] != run.parent_id:
         parent_id = clean["parent_id"]
@@ -155,6 +155,20 @@ def update_run(ctx: StoreCtx, run_id: str, **updates) -> LocalRun:
 
 def delete_run(ctx: StoreCtx, run_id: str) -> None:
     run_dir = get_run_dir(ctx, run_id)
+    run = get_run(ctx, run_id)
+    from . import manifests
+
+    for manifest_id in run.manifest_ids:
+        try:
+            manifest = manifests.get_manifest(ctx, manifest_id)
+        except StoreError:
+            continue
+        if run_id in manifest.run_ids:
+            manifests.update_manifest(
+                ctx,
+                manifest_id,
+                run_ids=[value for value in manifest.run_ids if value != run_id],
+            )
     remove_path(run_dir)
     rebuild_catalog(ctx.home)
 

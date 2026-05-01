@@ -5,33 +5,6 @@ issues from `local-artha-rev5`.
 
 ## Carryover bugs / coordination needed
 
-### Manifest `source_run_id` ↔ `associated_runs` drift
-
-**Context:** `local-artha-rev5` migrated manifests from a single
-`source_run_id` to `associated_runs: list[AssociatedRun]` (see
-`tools/migrate_workspace_schema.py`). The cloud API was not migrated in
-lockstep — it still expects `source_run_id`.
-
-**Symptom in rev5:** `LocalManifest.source_run_id` was referenced in three
-places that would have raised `AttributeError` at runtime
-(`cloud_portal.ensure_manifest`, `plan._append_pull_linked_manifest_actions`,
-`exec._execute_pull_plan` manifest branches). Rev5 now translates at the
-boundary (`associated_runs[0].run_id` on push; wraps `source_run_id` into a
-single `associated_runs` entry on pull), but this loses the multi-run
-information on every cloud round trip.
-
-**Decision needed for artha-os:**
-- Option A: cloud adopts `associated_runs` (multi-run parity with local).
-  Coordinated schema + migration on the cloud side.
-- Option B: local reverts to single `source_run_id`; we accept that a
-  manifest can only be associated with one source run.
-- Option C: keep both, but make the translation explicit and bidirectional,
-  with a clear ownership rule (which side is source of truth when they
-  diverge).
-
-**Action:** pick one before any sync code lands in artha-os. Don't ship the
-boundary-translation shim — it's a band-aid, not a design.
-
 ### `data_recorder` doesn't couple to the slowest writer
 
 **Context:** The recorder ticks at `LOOP_RATE_HZ` and, on each tick, appends

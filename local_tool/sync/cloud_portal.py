@@ -99,22 +99,17 @@ class CloudPortal:
             },
         )
 
-    def patch_run(self, run, *, include_links: bool, allowed_manifest_ids: set[str] | None = None) -> None:
-        payload: dict[str, Any] = {
-            "name": run.name,
-            "parent_id": run.parent_id,
-        }
-        if include_links:
-            payload["links"] = [
-                link.model_dump()
-                for link in run.links
-                if link.target_type == "manifest"
-                and (allowed_manifest_ids is None or link.target_id in allowed_manifest_ids)
-            ]
-        self._request_json("PATCH", f"/api/runs/{run.id}", json=payload)
+    def patch_run(self, run) -> None:
+        self._request_json(
+            "PATCH",
+            f"/api/runs/{run.id}",
+            json={
+                "name": run.name,
+                "parent_id": run.parent_id,
+            },
+        )
 
     def ensure_manifest(self, manifest) -> bool:
-        source_run_id = manifest.associated_runs[0].run_id if manifest.associated_runs else None
         return self._request_create_or_existing_by_id(
             "POST",
             "/api/manifests",
@@ -132,15 +127,12 @@ class CloudPortal:
                 "fps": manifest.fps,
                 "encoding": manifest.encoding,
                 "features": manifest.features,
-                "source_run_id": source_run_id,
-                "associated_runs": [run.model_dump() for run in manifest.associated_runs],
                 "success_rate": manifest.success_rate,
                 "rated_episodes": manifest.rated_episodes,
             },
         )
 
     def patch_manifest(self, manifest) -> None:
-        source_run_id = manifest.associated_runs[0].run_id if manifest.associated_runs else None
         self._request_json(
             "PATCH",
             f"/api/manifests/{manifest.id}",
@@ -152,12 +144,26 @@ class CloudPortal:
                 "fps": manifest.fps,
                 "encoding": manifest.encoding,
                 "features": manifest.features,
-                "source_run_id": source_run_id,
-                "associated_runs": [run.model_dump() for run in manifest.associated_runs],
                 "success_rate": manifest.success_rate,
                 "rated_episodes": manifest.rated_episodes,
             },
         )
+
+    def add_run_manifest(self, run_id: str, manifest_id: str) -> None:
+        self._request_json(
+            "POST",
+            f"/api/runs/{run_id}/manifests",
+            json={"manifest_id": manifest_id},
+            expected=(200, 201),
+        )
+
+    def list_run_manifests(self, run_id: str) -> list[dict[str, Any]]:
+        response = self._request_json("GET", f"/api/runs/{run_id}/manifests")
+        return response.get("manifests", [])
+
+    def list_manifest_runs(self, manifest_id: str) -> list[dict[str, Any]]:
+        response = self._request_json("GET", f"/api/manifests/{manifest_id}/runs")
+        return response.get("runs", [])
 
     def sync_entity_files(
         self,
