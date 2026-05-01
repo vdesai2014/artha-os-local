@@ -411,32 +411,94 @@ artha provenance set \
   --source-checkpoint checkpoints/best.pt \
   --fps 30
 
-artha provenance get
+# Verify provenance landed correctly.
+artha provenance get | python3 -c "
+import json, sys
+p = json.load(sys.stdin)
+assert p.get('manifest_name') == 'eval-imitation-learning-grasp-pickup', f'manifest_name={p.get(\"manifest_name\")!r}'
+assert p.get('policy_name') == 'imitation-learning-cnn-mlp', f'policy_name={p.get(\"policy_name\")!r}'
+assert p.get('source_checkpoint') == 'checkpoints/best.pt', f'source_checkpoint={p.get(\"source_checkpoint\")!r}'
+print('OK: provenance set for IL eval')
+"
 ```
+
+### Step 11 — Verify health of the demo runtime
+
+These probes confirm the data plane is actually flowing — not just that
+processes are alive. Run them all; any failure means the runtime isn't
+healthy and you should triage via the Diagnostics section below before
+auto-flowing to Stage 02.
+
+```bash
+# Process state — every service should be running.
+artha status --json
+
+# Data plane probes — sim publishing state, IL inference publishing
+# commands, UI camera path producing frames end-to-end.
+artha peek sim_robot/actual --timeout 2
+artha peek inference/desired --timeout 2
+artha camera camera/overhead_ui --save /tmp/tour-overhead.png --timeout 3
+```
+
+## Diagnostics if a step fails
+
+When something above fails, here's the toolbox:
+
+- **Service down or crashed** — `artha status --json` shows the service
+  not running. Tail its log:
+  ```bash
+  artha logs <service-name> -n 80
+  ```
+  Services to check: `sim`, `data_recorder`,
+  `imitation_learning_inference`, `video_bridge`, `bridge`, `commander`,
+  `eval_runner`, `param_server`.
+- **No frames on a topic** — `artha peek` times out. The publisher is
+  broken; check `artha logs sim` and verify SHM types compile:
+  `python3 -c "from core.types import RobStrideState, RobStrideCommand, CameraFrame"`.
+- **Stale SHM segments after a struct-size change** — clear them and
+  restart: `rm -rf /tmp/iceoryx2 && artha down && artha up --force`.
+- **Port conflicts** (4222 NATS, 8000 frontend) — another local stack
+  is running. Kill it or use `artha up --force`.
+- **Provenance mismatch** — re-run Step 10 with the right values; verify
+  via `artha provenance get`.
+
+If you can't get past a failure after triage, surface to the user and
+offer to file feedback (see "Filing feedback (any stage)" in
+`onboard.md`).
 
 ## Success criteria
 
-- `which artha` resolves; `frontend/dist/index.html` exists;
-  `nats-server --version` prints 2.x; the `video-bridge` release
-  binary exists.
-- `/tmp/artha-grasp-clone.json` exists; `workspace/grasp-pickup__*/`
-  exists and contains `runs/` with the trained policies (e.g.,
-  `runs/imitation-learning__*` plus the deeper rungs nested
-  inside it).
-- `core/types.py` has `RobStrideState`, `RobStrideCommand`,
-  `CameraFrame`.
-- `services.yaml.pre-demo` exists; `services.yaml` declares
-  `imitation_learning_inference` with `cmd` pointing at the IL run
-  dir's `inference.py`.
-- `services/data_recorder/main.py` has the sim-demo source config
-  marker.
-- `artha status` shows the demo runtime services running:
-  `imitation_learning_inference`, `commander`, `data_recorder`,
-  `video_bridge`, `eval_runner`, plus the base components.
-- `artha provenance get` returns the IL eval manifest.
+All of these must hold; each maps to a probe you've actually run.
 
-If any criterion fails, surface in chat and triage. Do NOT auto-flow
-to Stage 02 with a broken runtime.
+- **Install** — `which artha` resolves; `frontend/dist/index.html`
+  exists; `nats-server --version` prints 2.x; the `video-bridge`
+  release binary exists.
+- **Clone** — `/tmp/artha-grasp-clone.json` exists;
+  `workspace/grasp-pickup__*/` contains `runs/` with the trained
+  policies (e.g., `runs/imitation-learning__*` plus the deeper rungs
+  nested inside).
+- **Wiring** — `core/types.py` has `RobStrideState`,
+  `RobStrideCommand`, `CameraFrame`. `services.yaml.pre-demo` exists.
+  `services.yaml` declares `imitation_learning_inference` with `cmd`
+  pointing at the IL run dir's `inference.py`.
+  `services/data_recorder/main.py` has the sim-demo source config
+  marker.
+- **Process state** — `artha status --json` reports `nats`,
+  `local_tool`, `supervisor`, plus `imitation_learning_inference`,
+  `commander`, `data_recorder`, `video_bridge`, `bridge`,
+  `eval_runner`, `param_server` all `running`.
+- **Data plane** — `artha peek sim_robot/actual` returns a
+  `RobStrideState` snapshot within 2s. `artha peek inference/desired`
+  returns a `RobStrideCommand` snapshot within 2s.
+  `artha camera camera/overhead_ui --save /tmp/tour-overhead.png`
+  writes a PNG.
+- **Provenance** — `artha provenance get` returns the eval manifest
+  with `policy-name: imitation-learning-cnn-mlp`, the IL run's
+  `source-run-id`, and `source-checkpoint: checkpoints/best.pt`. The
+  inline assertion in Step 10 above already verified this.
+
+If any criterion fails, follow Diagnostics. Do NOT auto-flow to
+Stage 02 with a broken runtime.
 
 ## Next file
 

@@ -29,7 +29,27 @@ success criterion is met, immediately open
 ## Allowed commands
 
 ```bash
-# Link the ACT+PPO eval manifest as an output of the ACT+PPO run.
+# 1. Preflight — confirm the user actually completed the ACT+PPO eval.
+# The user typed `continue`, but verify the manifest has at least one
+# episode before claiming the link succeeds. If 0 episodes, do NOT
+# proceed — surface to the user and ask them to confirm.
+python3 - <<'PY'
+import json, urllib.request
+m = next(
+    (m for m in json.loads(urllib.request.urlopen("http://127.0.0.1:8000/api/manifests?type=eval").read())["manifests"]
+     if m["name"] == "eval-act-ppo-grasp-pickup"),
+    None,
+)
+if m is None:
+    raise SystemExit("FAIL: eval-act-ppo-grasp-pickup manifest not found — did the user complete the ACT+PPO eval?")
+ep_count = m.get("episode_count", 0)
+print(f"OK: manifest_id={m['id']} episode_count={ep_count}")
+if ep_count == 0:
+    raise SystemExit("FAIL: manifest has 0 episodes — the user may not have completed the ACT+PPO eval. Stop and confirm with the user.")
+PY
+
+# 2. Link the ACT+PPO eval manifest as an output of the ACT+PPO run,
+# then verify the link landed via the bidirectional GET.
 python3 - <<'PY'
 import json, urllib.request
 from pathlib import Path
@@ -57,7 +77,12 @@ req = urllib.request.Request(
     headers={"Content-Type": "application/json"},
 )
 urllib.request.urlopen(req).read()
-print(f"Linked manifest {manifest['id']} to ACT+PPO run {run_id}")
+
+# Verify the link landed via the bidirectional GET.
+linked = json.loads(urllib.request.urlopen(f"{API}/runs/{run_id}/manifests").read())["manifests"]
+assert any(m["name"] == "eval-act-ppo-grasp-pickup" for m in linked), \
+    "FAIL: ACT+PPO eval manifest NOT in ACT+PPO run's manifests after POST"
+print(f"OK: linked manifest {manifest['id']} to ACT+PPO run {run_id}; verified via GET")
 PY
 ```
 
@@ -67,15 +92,18 @@ focused REST patch.
 
 ## Success criteria
 
-- The ACT+PPO run now has an output link to the
-  `eval-act-ppo-grasp-pickup` manifest (the link script's print
-  statement above confirms `Linked manifest <id> as output of
-  ACT+PPO run <id>`).
+- **Preflight passed** — `eval-act-ppo-grasp-pickup` manifest exists
+  with `episode_count ≥ 1` (Step 1 print statement).
+- **Link landed** — bidirectional GET on
+  `/api/runs/{ACT_PPO_run_id}/manifests` includes
+  `eval-act-ppo-grasp-pickup` (Step 2 inline assertion).
 
-If the link fails (e.g., manifest not found because the user
-didn't actually complete the ACT+PPO eval), surface in chat and
-ask the user to confirm the eval finished. Do NOT auto-flow with
-a missing manifest.
+If the preflight fails, the user likely didn't complete the eval —
+surface in chat and ask them to confirm before retrying. If the
+link itself fails (POST returned but GET doesn't show the manifest),
+something's wrong with the junction store — check
+`artha logs local_tool -n 80`. Do NOT auto-flow with an unverified
+link.
 
 ## Next file
 

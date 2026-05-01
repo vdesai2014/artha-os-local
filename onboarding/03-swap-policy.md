@@ -47,7 +47,26 @@ is provenance metadata only.
 Run, in order:
 
 ```bash
-# 1. Link the IL eval manifest as an output of the IL run. The IL
+# 1. Preflight — confirm the user actually completed the IL eval before
+# any destructive change. The user typed `continue`, but verify the
+# manifest has at least one episode. If it doesn't, do NOT proceed —
+# stop, ask the user to confirm they completed the in-browser tour.
+python3 - <<'PY'
+import json, urllib.request
+m = next(
+    (m for m in json.loads(urllib.request.urlopen("http://127.0.0.1:8000/api/manifests?type=eval").read())["manifests"]
+     if m["name"] == "eval-imitation-learning-grasp-pickup"),
+    None,
+)
+if m is None:
+    raise SystemExit("FAIL: eval-imitation-learning-grasp-pickup manifest not found — did the user complete the IL eval?")
+ep_count = m.get("episode_count", 0)
+print(f"OK: manifest_id={m['id']} episode_count={ep_count}")
+if ep_count == 0:
+    raise SystemExit("FAIL: manifest has 0 episodes — the user may not have completed the IL eval. Stop and confirm with the user before swapping policies.")
+PY
+
+# 2. Link the IL eval manifest as an output of the IL run. The IL
 # eval already happened in Stage 02 while the runtime was up, so
 # the manifest exists in local_tool. We attach it now so the eval
 # travels with the IL run on cloud push.
@@ -76,10 +95,15 @@ req = urllib.request.Request(
     headers={"Content-Type": "application/json"},
 )
 urllib.request.urlopen(req).read()
-print(f"Linked manifest {manifest['id']} to IL run {run_id}")
+
+# Verify the link landed via the bidirectional GET.
+linked = json.loads(urllib.request.urlopen(f"{API}/runs/{run_id}/manifests").read())["manifests"]
+assert any(m["name"] == "eval-imitation-learning-grasp-pickup" for m in linked), \
+    "FAIL: IL eval manifest NOT in IL run's manifests after POST"
+print(f"OK: linked manifest {manifest['id']} to IL run {run_id}; verified via GET")
 PY
 
-# 2. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
+# 3. Rewrite services.yaml — swap IL inference for ACT+PPO. Same
 # topology as Stage 01 otherwise; only the inference service and
 # commander POLICY_NAME change.
 python3 - <<'PY'
@@ -200,11 +224,20 @@ act_ppo_inference:
 ''')
 PY
 
-# 3. Restart with the new topology.
-artha up --force
-artha status
+# Verify the yaml shape after rewrite.
+python3 -c "
+import yaml
+d = yaml.safe_load(open('services.yaml'))
+assert 'act_ppo_inference' in d, 'FAIL: act_ppo_inference missing from services.yaml'
+assert 'imitation_learning_inference' not in d, 'FAIL: imitation_learning_inference still present'
+print('OK: services.yaml has act_ppo_inference, IL service removed')
+"
 
-# 4. Register ACT+PPO eval provenance over NATS.
+# 4. Restart with the new topology.
+artha up --force
+artha status --json
+
+# 5. Register ACT+PPO eval provenance over NATS.
 eval "$(python3 - <<'PY'
 import json
 from pathlib import Path
@@ -227,30 +260,59 @@ artha provenance set \
   --source-checkpoint checkpoints/rl_best_eval.ckpt \
   --fps 30
 
-artha provenance get
+# Verify provenance landed and matches what we expect.
+artha provenance get | python3 -c "
+import json, sys
+p = json.load(sys.stdin)
+assert p.get('manifest_name') == 'eval-act-ppo-grasp-pickup', f'manifest_name={p.get(\"manifest_name\")!r}'
+assert p.get('policy_name') == 'act-ppo-dense-affine', f'policy_name={p.get(\"policy_name\")!r}'
+assert p.get('source_checkpoint') == 'checkpoints/rl_best_eval.ckpt', f'source_checkpoint={p.get(\"source_checkpoint\")!r}'
+print('OK: provenance set for ACT+PPO')
+"
+
+# 6. Verify ACT+PPO inference is producing commands on the bus.
+artha peek inference/desired --timeout 3
 ```
 
-If `artha status` shows a service down, triage:
+If any verification above fails, triage before continuing. Common
+failure modes:
 
-```bash
-artha logs act_ppo_inference -n 80
-artha logs supervisor -n 80
-artha logs commander -n 80
-```
+- **`act_ppo_inference` not running** — checkpoint load failed. Check
+  `artha logs act_ppo_inference -n 80`. The script hardcodes
+  `SCRIPT_DIR/checkpoints/rl_best_eval.ckpt`; verify the file exists
+  in the deeply-nested ACT+PPO run dir.
+- **`artha peek inference/desired` times out** — inference up but not
+  publishing. Check whether sim is publishing state
+  (`artha peek sim_robot/actual`). If sim is fine but inference is
+  silent, check `artha logs act_ppo_inference -n 80` and
+  `artha logs commander -n 80`.
+- **Provenance mismatch** — re-run the `artha provenance set` block
+  with the right values.
+- **Stale SHM after services.yaml swap** — clear and restart:
+  `rm -rf /tmp/iceoryx2 && artha down && artha up --force`.
+
+If you can't get past a failure after triage, surface to the user and
+offer to file feedback (see "Filing feedback (any stage)" in
+`onboard.md`).
 
 ## Success criteria
 
-- The IL run now has an output link to the
-  `eval-imitation-learning-grasp-pickup` manifest (the link
-  script's print statement above confirms `Linked manifest <id>
-  as output of IL run <id>`).
-- `services.yaml` declares `act_ppo_inference` (no longer
-  `imitation_learning_inference`) pointing at the deeply-nested
-  ACT+PPO run dir's `inference.py`.
-- `artha status` shows `act_ppo_inference` running.
-- `artha provenance get` returns the
-  `eval-act-ppo-grasp-pickup` manifest with the local ACT+PPO
-  `source-run-id`.
+Each maps to a probe you've actually run inline above.
+
+- **Preflight passed** — IL eval manifest exists with `episode_count
+  ≥ 1` (Step 1 print statement).
+- **IL run linked** — bidirectional GET on
+  `/api/runs/{IL_run_id}/manifests` includes
+  `eval-imitation-learning-grasp-pickup` (Step 2 inline assertion).
+- **services.yaml swapped** — `act_ppo_inference` present,
+  `imitation_learning_inference` absent (Step 3 yaml verifier).
+- **Process state** — `artha status --json` shows
+  `act_ppo_inference` and the rest running (Step 4).
+- **Provenance set** — `artha provenance get` matches
+  `eval-act-ppo-grasp-pickup` / `act-ppo-dense-affine` /
+  `checkpoints/rl_best_eval.ckpt` (Step 5 inline assertion).
+- **Inference live on the bus** — `artha peek inference/desired`
+  returns a `RobStrideCommand` snapshot within 3s (Step 6).
 
 If any criterion fails, surface in chat and triage. Do NOT auto-flow
 to Stage 04 with a broken runtime.
