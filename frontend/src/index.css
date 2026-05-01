@@ -2874,6 +2874,32 @@ select {
   border: 1px solid var(--line);
 }
 
+.project-readme-tiptap table {
+  border-collapse: collapse;
+  margin: 14px 0;
+  width: 100%;
+  font-size: 12px;
+}
+
+.project-readme-tiptap th,
+.project-readme-tiptap td {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.project-readme-tiptap th {
+  background: var(--black-raised);
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.project-readme-tiptap tr:nth-child(even) td {
+  background: rgba(15, 14, 13, 0.4);
+}
+
 .manifest-embed-card,
 .video-embed-block {
   margin: 14px 0;

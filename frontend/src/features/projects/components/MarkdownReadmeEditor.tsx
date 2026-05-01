@@ -3,8 +3,14 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
+// @ts-expect-error — turndown-plugin-gfm ships no types
+import * as turndownGfm from 'turndown-plugin-gfm'
 
 import { ReadmeEditorToolbar } from './ReadmeEditorToolbar'
 import { preprocessMarkdownEmbeds, serializeDatasetDirective, serializeVideoDirective } from '../editorEmbeds'
@@ -36,6 +42,8 @@ turndown.addRule('videoEmbed', {
     return `\n\n${serializeVideoDirective(manifestId, episodeId, camera)}\n\n`
   },
 })
+
+turndown.use(turndownGfm.tables)
 
 marked.setOptions({
   breaks: true,
@@ -83,6 +91,13 @@ export function MarkdownReadmeEditor({
         allowBase64: true,
         inline: false,
       }),
+      Table.configure({
+        resizable: false,
+        HTMLAttributes: { class: 'project-readme-table' },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       ManifestEmbed,
       VideoEmbed,
     ],
